@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws://127.0.0.1:9011; media-src 'self' blob:"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <title>语音工作台 · ekac-bubble</title>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"
+          ><img src="assets/logo.webp" alt=""
+        /></span>
+        <div>ekac-bubble<span>声音，有自己的形状</span></div>
+      </div>
+      <div class="nav-caption">工作空间</div>
+      <nav aria-label="主导航">
+        <button id="workspace-nav" class="nav-item active" aria-current="page">
+          <span class="nav-icon">◫</span>语音工作台</button
+        ><button id="audio-test-page" class="nav-item">
+          <span class="nav-icon">♫</span>音频测试<span class="nav-arrow"
+            >↗</span
+          ></button
+        ><button id="model-nav" class="nav-item">
+          <span class="nav-icon">⌘</span>模型端口
+        </button><button id="tutorial-nav" class="nav-item">
+          <span class="nav-icon">▤</span>教程
+        </button>
+      </nav>
+      <img
+        class="sidebar-mascot"
+        src="assets/logo.webp"
+        alt=""
+        aria-hidden="true"
+      />
+      <div class="sidebar-bottom">
+        <div class="local-tag"><span class="dot"></span>本机处理</div>
+        <p>让文字有自己的声音。</p>
+        <div class="version">ekac-bubble<span>0.3.0</span></div>
+      </div>
+    </aside>
+    <main class="content">
+      <header class="page-header">
+        <div>
+          <div class="eyebrow">EKAC · VOICE IN BLOOM</div>
+          <h1 id="page-title">语音工作台</h1>
+          <p id="page-description">从一句话开始，让声音和文字一起出现。</p>
+        </div>
+        <button id="hide-app" class="tray-button">收起到托盘 ↘</button>
+        <div class="status-pill" role="status">
+          <span class="dot"></span><span id="status">准备就绪</span>
+        </div>
+      </header>
+      <div id="workspace-panel">
+        <div class="workspace-grid">
+          <section class="card">
+            <div class="card-heading">
+              <h2><span class="step">01</span>音频设备</h2>
+              <button id="devices" class="text-button">刷新设备 ↻</button>
+            </div>
+            <label class="field"
+              >麦克风<select id="mic" aria-label="麦克风">
+                <option value="">系统默认</option>
+              </select></label
+            ><label class="field"
+              >播放设备<select id="output" aria-label="播放设备">
+                <option value="">系统默认</option>
+              </select
+            ></label>
+            <p class="hint">使用虚拟音频设备，将短音节声音送入游戏麦克风。</p>
+          </section>
+          <section class="card">
+            <div class="card-heading">
+              <h2><span class="step">02</span>开始说话</h2>
+              <span class="tag">16 kHz · 本地识别</span>
+            </div>
+            <div class="field-pair">
+              <label class="field"
+                >收音方式<select id="capture">
+                  <option value="hold">按住说</option>
+                  <option value="continuous">持续监听</option>
+                </select></label
+              ><label class="field"
+                >全局快捷键<input id="hotkey" value="F8"
+              /></label>
+            </div>
+            <div class="actions">
+              <button id="listen" class="primary">开始监听</button
+              ><button id="hold">按住此处说话</button>
+            </div>
+            <div class="meter-row">
+              <span>麦克风电平</span
+              ><meter id="level" min="-100" max="0" value="-100"></meter>
+            </div>
+            <div id="heard" class="transcript">尚未识别</div>
+          </section>
+        </div>
+        <details class="model-setup card">
+          <summary>
+            <span>识别模型</span
+            ><span class="hint">SenseVoiceSmall · CPU 推理</span
+            ><span class="expand-mark">＋</span>
+          </summary>
+          <div class="actions">
+            <button id="download">下载并加载模型</button
+            ><button id="folder">导入已有模型</button
+            ><button id="load">加载模型</button>
+          </div>
+          <span id="modeldir" class="file-note"></span>
+          <p class="hint">首次使用先加载模型。文字试听无需加载识别模型。</p>
+        </details>
+        <section class="card composer">
+          <div class="card-heading">
+            <h2><span class="step">03</span>字幕与声音</h2>
+            <span id="queue" class="tag">等待 0 / 10</span>
+          </div>
+          <div class="routing-row">
+            <label class="field"
+              >使用场景<select id="mode">
+                <option value="general">通用游戏 · 仅声音</option>
+                <option value="chatbox">游戏 Chatbox · 整句发送</option>
+                <option value="model">模型气泡 · VRChat 头顶显示</option>
+              </select></label
+            ><label class="check"
+              ><input id="sound" type="checkbox" checked />播放短音节</label
+            >
+          </div>
+          <p id="mode-note" class="hint"></p>
+          <div class="sound-controls">
+            <label class="field slider-field"
+              >音量<input
+                id="volume"
+                type="range"
+                min="0"
+                max="1"
+                step=".01"
+                value=".6" /></label
+            ><label class="field"
+              >音高 <span class="unit">Hz</span
+              ><input
+                id="pitch"
+                type="number"
+                min="200"
+                max="800"
+                value="400" /></label
+            ><label class="field"
+              >语速 <span class="unit">音节 / 秒</span
+              ><input
+                id="rate"
+                type="number"
+                min="4"
+                max="25"
+                value="13" /></label
+            ><label class="field">单音节时长 <span class="unit">ms</span><input id="unit-duration" type="number" min="60" max="400" step="10" value="100" /></label
+            ><button id="save">保存设置</button>
+          </div>
+          <p class="hint">单音节时长决定每个音节发多久；语速限制音节出现的频率。时长较大时会自动降低实际语速，完整发声后再播下一个音节。</p>
+          <div class="suffix-row">
+            <label class="check suffix-toggle"
+              ><input id="suffix-enabled" type="checkbox" />固定句尾加字</label
+            ><input
+              id="suffix-text"
+              class="suffix-input"
+              type="text"
+              maxlength="16"
+              value="喵"
+              placeholder="输入句尾字，如：喵、喵～"
+              aria-label="句尾追加文字"
+            /><span id="suffix-preview" class="hint suffix-preview"></span>
+          </div>
+          <textarea
+            id="text"
+            placeholder="输入一句话，也可以直接对麦克风说话…"
+            aria-label="待发送文字"
+          ></textarea>
+          <div class="actions">
+            <button id="test" class="primary">
+              加入播放队列 <span aria-hidden="true">↗</span></button
+            ><button id="stop" class="danger-quiet">停止并清空</button
+            ><button id="clear" class="text-button push-right">
+              清除 Chatbox
+            </button>
+          </div>
+          <div class="preview-area">
+            <div class="preview-caption"><span class="dot"></span>气泡预览</div>
+            <div id="bubble" class="speech-bubble" role="status">
+              你的话，会在这里慢慢出现。
+            </div>
+          </div>
+        </section>
+        <details class="activity card">
+          <summary>运行记录<span class="expand-mark">＋</span></summary>
+          <pre id="events" aria-live="polite"></pre>
+        </details>
+      </div>
+      <div id="model-panel" hidden>
+        <section class="card">
+          <div class="card-heading">
+            <h2>模型气泡与本机端口</h2>
+            <span class="tag">VRChat OSC · 协议 v1</span>
+          </div>
+          <p class="hint">
+            模型气泡模式下会通过 VRChat OSC（127.0.0.1:9000 /avatar/parameters/EB_*）推送文字切片到头顶气泡，同时保留本机预览端口。
+          </p>
+          <label class="field">连接地址<input id="endpoint" readonly /></label>
+          <div class="actions">
+            <button id="connect" class="primary">连接测试器</button>
+          </div>
+          <div class="preview-area">
+            <div class="preview-caption">模型气泡预览</div>
+            <div id="remote" class="speech-bubble">等待连接</div>
+          </div>
+          <p class="hint">
+            声音由选定的输出设备播放。文字与进度通过本机端口提供给模型适配器。
+          </p>
+        </section>
+      </div>
+      <div id="tutorial-panel" class="tutorial" hidden>
+        <section class="card tutorial-intro">
+          <span class="tag">第一次使用 · 从这里开始</span>
+          <h2>先听见，再把声音送进游戏。</h2>
+          <p>ekac-bubble 将麦克风语音识别成文字，再播放逐字短音节。它是游戏角色式的说话音效，不是逐字朗读的自然语音。</p>
+          <ol class="tutorial-quickstart">
+            <li><strong>先试听声音</strong><span>打开「音频测试」，选耳机、输入文字，点击「播放测试」。无需下载识别模型。</span></li>
+            <li><strong>再识别语音</strong><span>回到「语音工作台」，展开「识别模型」，首次点击「下载并加载模型」，也可导入已有模型。</span></li>
+            <li><strong>选择使用场景</strong><span>点击「刷新设备」，选真实麦克风和播放设备，保存设置，再点击「开始监听」。按住默认 F8 或界面按钮说话，松开后等待识别与播放；也可选「持续监听」。</span></li>
+          </ol>
+          <p class="tutorial-note">音频测试页的设置独立保存；选好音色和设备后，请在语音工作台设置同样的参数。更改场景或麦克风后，需要重新开始监听。</p>
+        </section>
+        <div class="tutorial-grid">
+          <section class="card">
+            <div class="card-heading"><h2>通用游戏 · 只发送声音</h2><span class="tag">声音路线</span></div>
+            <ol>
+              <li>按下方步骤配置 Voicemeeter，将合成音送入虚拟麦克风。</li>
+              <li>在工作台选择「通用游戏 · 仅声音」，勾选「播放短音节」，保存设置。</li>
+              <li>在游戏语音设置里，将输入设备选为 <strong>Voicemeeter Out B1</strong>，并开启游戏语音。</li>
+              <li>开始监听并说一句话，使用游戏的麦克风测试或让朋友确认声音。</li>
+            </ol>
+            <p class="tutorial-note">这个模式不发送文字；软件内的气泡只是本地预览。只选择耳机作为播放设备，游戏不会收到合成音。</p>
+          </section>
+          <section class="card">
+            <div class="card-heading"><h2>VRChat · Chatbox 字幕</h2><span class="tag">文字路线</span></div>
+            <ol>
+              <li>在 VRChat 的<strong>设置 → 虚拟形象 → OSC</strong>中打开 OSC 开关，位置见下图；也可在动作菜单打开 <strong>OSC → Enabled</strong>。</li>
+              <li>在工作台选择「游戏 Chatbox · 整句发送」，保存设置。使用 VRChat 默认 OSC 接收端口 <strong>9000</strong>，软件和游戏运行在同一台电脑。</li>
+              <li>开始监听，按住 F8 说话；也可输入文字，点击「加入播放队列」测试字幕。</li>
+              <li>只要字幕时关闭「播放短音节」；字幕加声音时，另外按 Voicemeeter 路线设置游戏麦克风。</li>
+            </ol>
+            <p class="tutorial-note">OSC 只负责文字，声音仍走游戏麦克风。Chatbox 整句发送，长文本分段；切换到「模型气泡 · VRChat 头顶显示」后不发 Chatbox，而是推送到已挂载 ekac气泡插件 的模型头顶。</p>
+            <a class="tutorial-link" href="https://docs.vrchat.com/docs/osc-overview" data-official-link="vrchat-osc">VRChat 官方 OSC 设置 ↗</a>
+          </section>
+          <figure class="card tutorial-osc">
+            <figcaption>VRChat 设置 → 虚拟形象 → OSC：将「OSC」开关打开。</figcaption>
+            <img src="../OSC开启位置.png" alt="VRChat 设置的虚拟形象页面，OSC 区域中的 OSC 开关处于开启状态" width="1484" height="404" loading="lazy" />
+          </figure>
+        </div>
+        <section class="card">
+          <div class="card-heading"><h2>推荐搭配 · Voicemeeter Banana</h2><span class="tag">把播放声音变成游戏麦克风</span></div>
+          <p>Voicemeeter 提供虚拟音频设备和混音。ekac-bubble 不附带或自动安装它；请从 VB-Audio 官网下载，按官方说明以管理员身份安装并重启电脑。</p>
+          <div class="tutorial-links">
+            <a class="tutorial-link" href="https://vb-audio.com/Voicemeeter/banana.htm" data-official-link="voicemeeter">Voicemeeter Banana 官方下载 ↗</a>
+            <a class="tutorial-link" href="https://voicemeeter.com/quick-tips-voicemeeter-virtual-inputs-and-outputs-windows-10-and-up/" data-official-link="voicemeeter-guide">官方输入／输出设备说明 ↗</a>
+          </div>
+          <div class="tutorial-route" aria-label="声音连接顺序">ekac-bubble <span>→</span> Voicemeeter Input <span>→</span> VAIO · B1 <span>→</span> Voicemeeter Out B1 <span>→</span> 游戏麦克风</div>
+          <ol>
+            <li>打开 Voicemeeter Banana，在右上方 <strong>A1</strong> 选择自己的耳机或扬声器，通常优先选择对应的 WDM 设备。</li>
+            <li>在 ekac-bubble 工作台点击「刷新设备」：<strong>麦克风选真实麦克风</strong>；播放设备选 <strong>Voicemeeter Input (VB-Audio Voicemeeter VAIO)</strong>，保存设置。</li>
+            <li>找到 Voicemeeter 的 <strong>VAIO 虚拟输入条</strong>，打开 <strong>B1</strong>，取消静音、检查音量。想自己也听到合成音时，再打开该条的 A1。</li>
+            <li>游戏的麦克风选 <strong>Voicemeeter Out B1</strong>。较旧驱动可能显示为 <strong>Voicemeeter Output (VB-Audio Voicemeeter VAIO)</strong>。</li>
+          </ol>
+          <div class="tutorial-grid tutorial-mix">
+            <div><h3>只发送角色音效</h3><p>只将 VAIO 虚拟输入条送入 B1。真实麦克风输入条的 B1 保持关闭，或不在 Voicemeeter 中添加真实麦克风；ekac-bubble 仍直接读取真实麦克风做识别。</p></div>
+            <div><h3>原声和音效一起发送</h3><p>在 Voicemeeter 的硬件输入条选择真实麦克风，再打开该条的 B1。此时游戏会同时收到原声和短音节，请确认这是你想要的效果。</p></div>
+          </div>
+          <p class="tutorial-note">游戏声音和系统声音保持输出到耳机，避免误送进 B1。ekac-bubble 的识别麦克风不要选 Out B1，否则可能把合成音再次识别。使用耳机可减少回授。</p>
+        </section>
+        <section class="card tutorial-faq">
+          <div class="card-heading"><h2>遇到问题，先检查这里</h2></div>
+          <details><summary>软件有电平，游戏里没有声音</summary><p>先在「音频测试」确认能播放，再检查 VAIO 输入条是否有电平、B1 是否开启，以及游戏是否选择 Out B1 并打开语音。输入和输出是配对设备，名称方向不要选反。</p></details>
+          <details><summary>没有字幕，或完全没有识别结果</summary><p>没有识别结果：检查真实麦克风、Windows 麦克风权限、识别模型和「开始监听」状态。已有识别结果但没有字幕：检查 Chatbox 场景、VRChat 的 OSC 开关及默认 9000 端口；通用游戏模式不会发送字幕。</p></details>
+          <details><summary>只有一边响、重复声音或啸叫</summary><p>检查 Voicemeeter 的左右平衡是否居中。出现原声叠加时关闭真实麦克风条的 B1；重复识别时检查 STT 是否误选了虚拟输出。监听优先用耳机，不要把游戏声音回送进 B1。</p></details>
+          <details><summary>收起窗口后还会工作吗？</summary><p>「收起到托盘」会继续监听与播放。关闭窗口则保存设置并退出；停止监听会释放识别模型。下次启动后重新开始监听即可。</p></details>
+        </section>
+      </div>
+      <footer>ekac-bubble <span>文字 · 短音节 · 一点表达</span></footer>
+    </main>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

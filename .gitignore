@@ -1,0 +1,37 @@
+# Dependencies and generated application files
+/node_modules/
+/dist/
+/release/
+/web/app.js
+/web/audio-test.js
+*.tsbuildinfo
+__pycache__/
+*.pyc
+
+# Local settings, recognition weights, audio captures and diagnostics
+/data/
+/scratch/
+/models/
+/recordings/
+/logs/
+*.log
+*.onnx
+*.onnx.data
+/coverage/
+
+# Local editor and operating-system state
+.vs/
+.idea/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# Local environment values and signing credentials
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key

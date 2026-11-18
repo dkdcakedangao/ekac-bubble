@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws://127.0.0.1:9011; media-src 'self' blob:"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <title>音频测试 · ekac-bubble</title>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"
+          ><img src="assets/logo.webp" alt=""
+        /></span>
+        <div>ekac-bubble<span>声音，有自己的形状</span></div>
+      </div>
+      <div class="nav-caption">工作空间</div>
+      <nav aria-label="主导航">
+        <a href="index.html" class="nav-item"
+          ><span class="nav-icon">◫</span>语音工作台</a
+        ><span class="nav-item active" aria-current="page"
+          ><span class="nav-icon">♫</span>音频测试<span class="nav-arrow"
+            >↗</span
+          ></span
+        ><a href="index.html#model" class="nav-item"
+          ><span class="nav-icon">⌘</span>模型端口</a
+        ><a href="index.html#tutorial" class="nav-item"
+          ><span class="nav-icon">▤</span>教程</a
+        >
+      </nav>
+      <img
+        class="sidebar-mascot"
+        src="assets/logo.webp"
+        alt=""
+        aria-hidden="true"
+      />
+      <div class="sidebar-bottom">
+        <div class="local-tag"><span class="dot"></span>本机处理</div>
+        <p>让文字有自己的声音。</p>
+        <div class="version">ekac-bubble<span>0.3.0</span></div>
+      </div>
+    </aside>
+    <main class="content">
+      <header class="page-header">
+        <div>
+          <div class="eyebrow">EKAC · SOUND STUDIO</div>
+          <h1>音频测试</h1>
+          <p>输入一段文字，听听它的声音。</p>
+        </div>
+        <div class="status-pill"><span class="dot"></span>独立试听</div>
+      </header>
+      <section class="card audio-studio">
+        <div class="card-heading">
+          <h2>声音实验台</h2>
+          <span class="tag">无需识别模型</span>
+        </div>
+        <div class="device-row">
+          <label class="field">输出设备<select id="test-output"></select></label
+          ><button id="refresh-output" class="text-button">刷新设备 ↻</button>
+        </div>
+        <p id="device-note" class="hint">
+          耳机可直接试听；使用虚拟音频设备时，在配对的录音端检查声音。
+        </p>
+        <div class="sound-controls">
+          <label class="field slider-field"
+            >音量<input
+              id="test-volume"
+              type="range"
+              min="0"
+              max="1"
+              step=".01"
+              value=".6" /></label
+          ><label class="field"
+            >音高 <span class="unit">Hz</span
+            ><input
+              id="test-pitch"
+              type="number"
+              min="200"
+              max="800"
+              value="400" /></label
+          ><label class="field"
+            >语速 <span class="unit">音节 / 秒</span
+            ><input id="test-rate" type="number" min="4" max="25" value="13"
+          /></label><label class="field">单音节时长 <span class="unit">ms</span><input id="test-unit-duration" type="number" min="60" max="400" step="10" value="100" /></label>
+        </div>
+        <p class="hint">试试将时长从 100 ms 调至 300 ms：每个音节会发得更长，音高独立控制。时长较大时会降低实际语速，避免音节重叠。</p>
+        <label class="field"
+          >试听文字<textarea id="audio-text" placeholder="输入想试听的文字…">
+你好，这是音频输出测试。今天也要开心！</textarea
+          >
+        </label>
+        <div class="actions">
+          <button id="play-audio" class="primary">▶ 播放测试</button
+          ><button id="stop-audio" disabled>■ 停止</button
+          ><span id="audio-status" class="hint" role="status">等待播放</span>
+        </div>
+        <div class="preview-area">
+          <div class="preview-caption">
+            <span class="dot"></span>逐字预览<span
+              id="audio-progress"
+              class="push-right"
+              >0 / 0 字</span
+            >
+          </div>
+          <div id="audio-bubble" class="speech-bubble" role="status">
+            文字将在这里逐渐显示
+          </div>
+        </div>
+        <div class="meter-row">
+          <span>软件输出电平</span
+          ><meter id="audio-level" min="-80" max="0" value="-80"></meter
+          ><span class="hint">仅显示生成信号</span>
+        </div>
+      </section>
+      <section class="card config-card">
+        <div class="card-heading">
+          <h2>测试配置</h2>
+          <span id="config-status" class="hint" role="status">正在载入…</span>
+        </div>
+        <div class="device-row">
+          <label class="field"
+            >配置文件<input id="config-path" readonly /></label
+          ><button id="show-config">打开文件夹 ↗</button>
+        </div>
+        <p class="hint">
+          修改后自动保存，重开恢复。本页独立试听，不发送 Chatbox 或模型消息。
+        </p>
+      </section>
+      <footer>ekac-bubble <span>先听见，再传达。</span></footer>
+    </main>
+    <script type="module" src="audio-test.js"></script>
+  </body>
+</html>
