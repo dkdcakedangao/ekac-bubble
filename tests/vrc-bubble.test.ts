@@ -49,10 +49,17 @@ const atlasJson = JSON.parse(
 );
 const lookup = new GlyphLookup(atlasJson);
 
-test("glyph lookup encodes CJK, colloquial particles, ASCII tiers and unknown fallback", () => {
+test("glyph lookup encodes CJK, Page 1 GB2312 L2, T2S fallback, fullwidth ASCII, custom slots and unknown fallback", () => {
   const you = lookup.get("你");
   const en = lookup.get("嗯");
   const miao = lookup.get("喵");
+  const ting = lookup.get("霆");
+  const tradDiu = lookup.get("丟");
+  const simpDiu = lookup.get("丢");
+  const fwA = lookup.get("Ａ");
+  const ascA = lookup.get("A");
+  const fw1 = lookup.get("１");
+  const asc1 = lookup.get("1");
   const space = lookup.get(" ");
   const letterI = lookup.get("i");
   const letterA = lookup.get("a");
@@ -60,6 +67,10 @@ test("glyph lookup encodes CJK, colloquial particles, ASCII tiers and unknown fa
   assert.ok(you.row >= 2 && you.advance === 1.0);
   assert.ok(en.row >= 2 && en.advance === 1.0);
   assert.ok(miao.row >= 2 && miao.advance === 1.0);
+  assert.ok(ting.row >= 64 && ting.row < 127 && ting.advance === 1.0);
+  assert.deepEqual(tradDiu, simpDiu);
+  assert.deepEqual(fwA, ascA);
+  assert.deepEqual(fw1, asc1);
   assert.equal(space.col, 1);
   assert.equal(space.row, 0);
   assert.equal(letterI.advance, 0.36);
@@ -68,6 +79,21 @@ test("glyph lookup encodes CJK, colloquial particles, ASCII tiers and unknown fa
 
   const rare = lookup.get("𠮷");
   assert.deepEqual(rare, lookup.fallback);
+
+  const status = lookup.setCustomChars("霆䴉𠮷");
+  assert.deepEqual(status.skippedBuiltIn, ["霆"]);
+  assert.deepEqual(status.assigned, ["䴉", "𠮷"]);
+  assert.deepEqual(lookup.customStatus, status);
+  assert.deepEqual(lookup.get("霆"), ting);
+  const customIbis = lookup.get("䴉");
+  const customYoshi = lookup.get("𠮷");
+  assert.equal(customIbis.col, 0);
+  assert.equal(customIbis.row, 127);
+  assert.equal(customIbis.advance, 1.0);
+  assert.equal(customYoshi.col, 1);
+  assert.equal(customYoshi.row, 127);
+  lookup.setCustomChars("");
+  assert.deepEqual(lookup.get("䴉"), lookup.fallback);
 });
 
 test("layout wraps lines by proportional width, respects kinsoku, and splits overflow into new bubbles", () => {

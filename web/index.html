@@ -41,7 +41,7 @@
       <div class="sidebar-bottom">
         <div class="local-tag"><span class="dot"></span>本机处理</div>
         <p>让文字有自己的声音。</p>
-        <div class="version">ekac-bubble<span>0.3.0</span></div>
+        <div class="version">ekac-bubble<span>0.3.1</span></div>
       </div>
     </aside>
     <main class="content">
@@ -218,6 +218,24 @@
           <p class="hint">
             声音由选定的输出设备播放。文字与进度通过本机端口提供给模型适配器。
           </p>
+        </section>
+        <section class="card">
+          <div class="card-heading">
+            <h2>个人生僻字扩展槽位</h2>
+            <span class="tag">第 128 行 · 最多 64 字</span>
+          </div>
+          <p class="hint">
+            模型气泡默认已内置 8,089 个字符（含全部 GB2312 一/二级字如「霆」「尬」「氪」「炫」，并支持繁简自动转换）。若需显示极生僻字或专属昵称字符，请在此填入并同步填入 Unity 气泡工坊「一键换字体」中重新烘焙。
+          </p>
+          <label class="field"
+            >个人必收生僻字（自动跳过已内置字与重复字）<input
+              id="custom-glyphs"
+              type="text"
+              maxlength="256"
+              placeholder="例如：䴉𠮷𰻞（顺序须与 Unity 字体烘焙一致）"
+              aria-label="个人生僻字扩展"
+          /></label>
+          <p id="custom-glyphs-info" class="hint"></p>
         </section>
       </div>
       <div id="tutorial-panel" class="tutorial" hidden>

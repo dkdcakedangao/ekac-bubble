@@ -6,12 +6,23 @@ export interface GlyphEntry {
 
 export interface GlyphAtlasData {
   version: number;
+  pages?: number;
   grid: number;
+  rows?: number;
   cellSize: number;
   atlasSize: number;
+  customRow?: number;
+  customCapacity?: number;
   fallback: [number, number, number];
   space: [number, number, number];
+  t2sPairs?: string;
   glyphs: Record<string, [number, number, number]>;
+}
+
+export interface CustomGlyphAssignment {
+  assigned: string[];
+  skippedBuiltIn: string[];
+  overflow: string[];
 }
 
 export interface BubbleChunk {
@@ -30,12 +41,32 @@ const NO_LINE_START = new Set(Array.from("，。！？、；：”’）》】�
 const NO_LINE_END = new Set(Array.from("“‘（《【「『([{"));
 const ASCII_WORD_CHAR = /^[A-Za-z0-9'\-]$/;
 
+export function normalizeFullwidthAscii(ch: string): string {
+  if (ch === "\u3000") return " ";
+  const cp = ch.codePointAt(0);
+  if (cp !== undefined && cp >= 0xff01 && cp <= 0xff5e) {
+    return String.fromCodePoint(cp - 0xfee0);
+  }
+  return ch;
+}
+
 export class GlyphLookup {
   private readonly map = new Map<string, GlyphEntry>();
+  private readonly customMap = new Map<string, GlyphEntry>();
+  private readonly t2sMap = new Map<string, string>();
+  private customAssignment: CustomGlyphAssignment = {
+    assigned: [],
+    skippedBuiltIn: [],
+    overflow: [],
+  };
+  readonly customRow: number;
+  readonly customCapacity: number;
   readonly fallback: GlyphEntry;
   readonly space: GlyphEntry;
 
-  constructor(data: GlyphAtlasData) {
+  constructor(data: GlyphAtlasData, customChars = "") {
+    this.customRow = data.customRow ?? 127;
+    this.customCapacity = data.customCapacity ?? 64;
     this.fallback = {
       col: data.fallback[0],
       row: data.fallback[1],
@@ -49,11 +80,72 @@ export class GlyphLookup {
     for (const [ch, [col, row, advance]] of Object.entries(data.glyphs)) {
       this.map.set(ch, { col, row, advance });
     }
+    if (typeof data.t2sPairs === "string" && data.t2sPairs.length >= 2) {
+      const cps = Array.from(data.t2sPairs);
+      for (let i = 0; i + 1 < cps.length; i += 2) {
+        this.t2sMap.set(cps[i], cps[i + 1]);
+      }
+    }
+    if (customChars) {
+      this.setCustomChars(customChars);
+    }
+  }
+
+  get customStatus(): CustomGlyphAssignment {
+    return this.customAssignment;
+  }
+
+  setCustomChars(raw: string): CustomGlyphAssignment {
+    this.customMap.clear();
+    const assigned: string[] = [];
+    const skippedBuiltIn: string[] = [];
+    const overflow: string[] = [];
+    const seen = new Set<string>();
+
+    for (const ch of Array.from(raw ?? "")) {
+      if (!ch || /^\s$/u.test(ch) || (ch.codePointAt(0) ?? 0) < 0x20) continue;
+      if (seen.has(ch)) continue;
+      seen.add(ch);
+      if (this.map.has(ch)) {
+        skippedBuiltIn.push(ch);
+        continue;
+      }
+      if (assigned.length >= this.customCapacity) {
+        overflow.push(ch);
+        continue;
+      }
+      const col = assigned.length;
+      this.customMap.set(ch, { col, row: this.customRow, advance: 1.0 });
+      assigned.push(ch);
+    }
+    this.customAssignment = { assigned, skippedBuiltIn, overflow };
+    return this.customAssignment;
+  }
+
+  hasDirectOrCustom(ch: string): boolean {
+    if (ch === " ") return true;
+    return this.map.has(ch) || this.customMap.has(ch);
   }
 
   get(ch: string): GlyphEntry {
     if (ch === " ") return this.space;
-    return this.map.get(ch) ?? this.fallback;
+    const direct = this.map.get(ch) ?? this.customMap.get(ch);
+    if (direct) return direct;
+
+    const simp = this.t2sMap.get(ch);
+    if (simp) {
+      const mapped = this.map.get(simp) ?? this.customMap.get(simp);
+      if (mapped) return mapped;
+    }
+
+    const half = normalizeFullwidthAscii(ch);
+    if (half !== ch) {
+      if (half === " ") return this.space;
+      const mappedHalf = this.map.get(half) ?? this.customMap.get(half);
+      if (mappedHalf) return mappedHalf;
+    }
+
+    return this.fallback;
   }
 }
 

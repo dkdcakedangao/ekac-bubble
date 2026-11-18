@@ -2,6 +2,7 @@
 /node_modules/
 /dist/
 /release/
+/scripts/out/
 /web/app.js
 /web/audio-test.js
 *.tsbuildinfo

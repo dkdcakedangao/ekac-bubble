@@ -18,7 +18,7 @@ function deferred() {
   const promise = new Promise<void>((done) => (resolve = done));
   return { promise, resolve };
 }
-async function harness(options: { gate?: string; fail?: string; saveError?: boolean; streaming?: boolean; capture?: string; sound?: boolean; mode?: string; decode?: (pcm: Int16Array) => Promise<string> } = {}) {
+async function harness(options: { gate?: string; fail?: string; saveError?: boolean; streaming?: boolean; capture?: string; sound?: boolean; mode?: string; customGlyphs?: string; decode?: (pcm: Int16Array) => Promise<string> } = {}) {
   const gate = deferred();
   const entered = deferred();
   let initialized = false;
@@ -75,7 +75,15 @@ async function harness(options: { gate?: string; fail?: string; saveError?: bool
   const settings = {
     mode: options.mode || "general", capture: options.capture || "hold", sound: options.sound ?? !!options.streaming, volume: 0.6,
     pitch: 400, rate: 13, unitDurationMs: 100, hotkey: "F8", mic: "", output: "",
-    suffixEnabled: false, suffixText: "喵",
+    suffixEnabled: false, suffixText: "喵", customGlyphs: options.customGlyphs ?? "",
+  };
+  const customStats = (raw: string) => {
+    const uniq = Array.from(new Set(Array.from(raw || "")));
+    return {
+      customAssignedCount: Math.min(uniq.length, 64),
+      customOverflowCount: Math.max(0, uniq.length - 64),
+      customCapacity: 64,
+    };
   };
   const sandbox = createContext({
     URLSearchParams, performance, Int16Array, ArrayBuffer,
@@ -99,7 +107,7 @@ async function harness(options: { gate?: string; fail?: string; saveError?: bool
       host: {
         events(handler: (e: any) => void) { eventHandler=handler; },
         async call(command: string, data: any) {
-          if (command === "init") return { settings, visible: true, modelUrl: "" };
+          if (command === "init") return { settings, visible: true, modelUrl: "", ...customStats(settings.customGlyphs) };
           if (command === "load") worker = true;
           if (command === "unload") worker = false;
           if (command === "chat") chats.push(data);
@@ -113,7 +121,7 @@ async function harness(options: { gate?: string; fail?: string; saveError?: bool
           if (command === "save") {
             if (options.saveError) throw Error("save failed");
             saves.push(data);
-            return { modelUrl: "" };
+            return { modelUrl: "", ...customStats(data?.customGlyphs ?? "") };
           }
           return true;
         },
@@ -343,11 +351,35 @@ test("sentence suffix applies to ASR, manual queue, hot-toggles without dropping
     assert.equal(app.chats[1],"今天天气真好喵～");
     assert.equal(app.played[1],"今天天气真好喵～");
 
-    // 3. Closing saves updated suffix controls
+    // 3. Hot-updating customGlyphs saves quietly without dropping listening
+    app.element("custom-glyphs").value="䴉𠮷";
+    app.element("custom-glyphs").onchange();
+    await until(()=>app.saves.at(-1)?.customGlyphs==="䴉𠮷");
+    assert.equal(app.saves.at(-1).customGlyphs,"䴉𠮷");
+    assert.equal(app.run("listening"),true);
+
+    // 4. Closing saves updated suffix controls & customGlyphs
     app.element("suffix-enabled").checked=false;
     app.element("suffix-text").value="捏";
     await app.run("window.beforeAppClose()");
     assert.equal(app.saves.at(-1).suffixEnabled,false);
     assert.equal(app.saves.at(-1).suffixText,"捏");
+    assert.equal(app.saves.at(-1).customGlyphs,"䴉𠮷");
   }finally{await app.run("stopMic()");}
+});
+
+test("customGlyphs status updates on init, save button, test button and overflow", async () => {
+  const app = await harness({ customGlyphs: "䴉𠮷" });
+  assert.match(app.element("custom-glyphs-info").textContent, /2 \/ 64 格/);
+
+  app.element("custom-glyphs").value = "䴉𠮷𰻞";
+  await app.element("save").onclick();
+  assert.equal(app.saves.length, 1);
+  assert.match(app.element("custom-glyphs-info").textContent, /3 \/ 64 格/);
+
+  app.element("custom-glyphs").value = Array.from({ length: 66 }, (_, idx) => String.fromCodePoint(0x20000 + idx)).join("");
+  app.element("text").value = "";
+  await app.element("test").onclick();
+  assert.equal(app.saves.length, 2);
+  assert.match(app.element("custom-glyphs-info").textContent, /64 \/ 64 格.*超出上限 64 格，多余 2 字/);
 });

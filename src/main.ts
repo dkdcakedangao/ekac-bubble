@@ -70,6 +70,7 @@ let settings: any = {
   output: "",
   suffixEnabled: false,
   suffixText: "喵",
+  customGlyphs: "",
 };
 const tell = (type: string, data: any) => {
   if (win && !win.isDestroyed()) win.webContents.send("event", { type, data });
@@ -134,6 +135,7 @@ app.whenReady().then(async () => {
   );
   const glyphLookup = new GlyphLookup(
     JSON.parse(readFileSync(join(root, "web/bubble-glyphs.json"), "utf8")),
+    typeof settings.customGlyphs === "string" ? settings.customGlyphs : "",
   );
   const audioConfigPath = join(app.getPath("userData"), "audio-test.json");
   const audioWriter = new AudioConfigWriter(audioConfigPath);
@@ -269,6 +271,9 @@ app.whenReady().then(async () => {
             outputError,
             visible: win.isVisible() && !win.isMinimized(),
             modelUrl: router.modelUrl,
+            customAssignedCount: glyphLookup.customStatus.assigned.length,
+            customOverflowCount: glyphLookup.customStatus.overflow.length,
+            customCapacity: glyphLookup.customCapacity,
           };
         case "audio-test-config": {
           try {
@@ -302,6 +307,10 @@ app.whenReady().then(async () => {
           shell.showItemInFolder(audioConfigPath);
           return true;
         case "save": {
+          const rawCustomGlyphs =
+            data?.customGlyphs !== undefined
+              ? data.customGlyphs
+              : (settings.customGlyphs ?? "");
           const next = {
             ...settings,
             ...data,
@@ -310,12 +319,18 @@ app.whenReady().then(async () => {
               data?.suffixText !== undefined
                 ? data.suffixText
                 : (settings.suffixText ?? "喵"),
+            customGlyphs:
+              typeof rawCustomGlyphs === "string"
+                ? rawCustomGlyphs.replace(/[\x00-\x1f\x7f]/g, "")
+                : rawCustomGlyphs,
           };
           if (
             !["general", "chatbox", "model"].includes(next.mode) ||
             !["hold", "continuous"].includes(next.capture) ||
             typeof next.suffixText !== "string" ||
             Array.from(next.suffixText).length > MAX_SUFFIX_LENGTH ||
+            typeof next.customGlyphs !== "string" ||
+            Array.from(next.customGlyphs).length > 256 ||
             !Number.isFinite(next.pitch) ||
             next.pitch < 200 ||
             next.pitch > 800 ||
@@ -335,9 +350,15 @@ app.whenReady().then(async () => {
             key(next.hotkey);
           }
           await router.setMode(next.mode);
+          writeFileSync(file, JSON.stringify(next, null, 2));
+          const customAssign = glyphLookup.setCustomChars(next.customGlyphs);
           settings = next;
-          writeFileSync(file, JSON.stringify(settings, null, 2));
-          return { modelUrl: router.modelUrl };
+          return {
+            modelUrl: router.modelUrl,
+            customAssignedCount: customAssign.assigned.length,
+            customOverflowCount: customAssign.overflow.length,
+            customCapacity: glyphLookup.customCapacity,
+          };
         }
         case "choose-model": {
           const selected = await dialog.showOpenDialog(win, {

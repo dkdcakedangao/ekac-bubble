@@ -21,6 +21,7 @@ namespace EkacBubble.Editor
         public const string RootDir = "Assets/插件/EkacBubble";
         public const string GeneratedDir = RootDir + "/Generated";
         public const string AtlasPath = RootDir + "/Textures/EkacGlyphAtlas.png";
+        public const string AtlasPage1Path = RootDir + "/Textures/EkacGlyphAtlas_P1.png";
         public const string ShaderPath = RootDir + "/Shaders/EkacSpeechBubble.shader";
         public const string QuadPath = GeneratedDir + "/EkacBubbleQuad.asset";
         public const string MaterialPath = GeneratedDir + "/EkacBubbleMat.mat";
@@ -80,10 +81,13 @@ namespace EkacBubble.Editor
             BuildAllAssets();
             var mat = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
             var defAtlas = AssetDatabase.LoadAssetAtPath<Texture2D>(AtlasPath);
+            var defAtlas1 = AssetDatabase.LoadAssetAtPath<Texture2D>(AtlasPage1Path);
             Texture prevAtlas = mat != null ? mat.GetTexture("_AtlasTex") : null;
+            Texture prevAtlas1 = mat != null ? mat.GetTexture("_AtlasTex1") : null;
             Texture prevSkin = mat != null ? mat.GetTexture("_SkinTex") : null;
             Texture prevBadge = mat != null ? mat.GetTexture("_BadgeTex") : null;
             bool swappedAtlas = false;
+            bool swappedAtlas1 = false;
             bool swappedSkin = false;
             bool swappedBadge = false;
 
@@ -104,6 +108,11 @@ namespace EkacBubble.Editor
                         mat.SetTexture("_AtlasTex", defAtlas);
                         swappedAtlas = true;
                     }
+                    if (defAtlas1 != null && prevAtlas1 != defAtlas1)
+                    {
+                        mat.SetTexture("_AtlasTex1", defAtlas1);
+                        swappedAtlas1 = true;
+                    }
                     if (IsExternalAsset(prevSkin))
                     {
                         mat.SetTexture("_SkinTex", null);
@@ -114,7 +123,7 @@ namespace EkacBubble.Editor
                         mat.SetTexture("_BadgeTex", null);
                         swappedBadge = true;
                     }
-                    if (swappedAtlas || swappedSkin || swappedBadge)
+                    if (swappedAtlas || swappedAtlas1 || swappedSkin || swappedBadge)
                     {
                         EditorUtility.SetDirty(mat);
                     }
@@ -140,9 +149,10 @@ namespace EkacBubble.Editor
             }
             finally
             {
-                if (mat != null && (swappedAtlas || swappedSkin || swappedBadge))
+                if (mat != null && (swappedAtlas || swappedAtlas1 || swappedSkin || swappedBadge))
                 {
                     if (swappedAtlas && prevAtlas != null) mat.SetTexture("_AtlasTex", prevAtlas);
+                    if (swappedAtlas1 && prevAtlas1 != null) mat.SetTexture("_AtlasTex1", prevAtlas1);
                     if (swappedSkin) mat.SetTexture("_SkinTex", prevSkin);
                     if (swappedBadge) mat.SetTexture("_BadgeTex", prevBadge);
                     EditorUtility.SetDirty(mat);
@@ -239,9 +249,12 @@ namespace EkacBubble.Editor
             Texture2D tempSkin = null;
             Texture2D tempBadge = null;
             string tempCustomFontAsset = RootDir + "/Generated/_GalleryKai_SDF.png";
+            string tempCustomFontPage1 = EkacBubbleFontBaker.DerivePage1AssetPath(tempCustomFontAsset);
             var savedMatState = ScriptableObject.CreateInstance<EkacBubbleStylePreset>();
             savedMatState.CaptureFromMaterial(mat);
             Texture savedAtlas = mat.GetTexture("_AtlasTex");
+            Texture savedAtlas1 = mat.GetTexture("_AtlasTex1");
+            var defAtlas1 = AssetDatabase.LoadAssetAtPath<Texture2D>(AtlasPage1Path);
 
             try
             {
@@ -303,10 +316,11 @@ namespace EkacBubble.Editor
                     .FirstOrDefault(File.Exists);
                 if (!string.IsNullOrEmpty(customTtf))
                 {
-                    var kaiTex = EkacBubbleFontBaker.BakeFontAtlas(customTtf, tempCustomFontAsset, 42, 0, null, false);
+                    EkacBubbleFontBaker.BakeFontAtlas(customTtf, out var kaiReport, tempCustomFontAsset, 42, 0, null, false);
                     EkacBubbleStylePreset.ApplyBuiltInPreset(mat, EkacBuiltInPreset.MintWave, false);
                     mat.SetFloat("_WaveAmp", 0f);
-                    mat.SetTexture("_AtlasTex", kaiTex);
+                    mat.SetTexture("_AtlasTex", kaiReport.Texture);
+                    if (kaiReport.TexturePage1 != null) mat.SetTexture("_AtlasTex1", kaiReport.TexturePage1);
                     Snap("preview_custom_font.png", new Color(0.88f, 0.94f, 0.92f, 1f));
                 }
 
@@ -317,10 +331,13 @@ namespace EkacBubble.Editor
                 EkacBubbleScenePreview.ClearGlobals();
                 savedMatState.ApplyToMaterial(mat, false);
                 mat.SetTexture("_AtlasTex", savedAtlas != null ? savedAtlas : defAtlas);
+                mat.SetTexture("_AtlasTex1", savedAtlas1 != null ? savedAtlas1 : defAtlas1);
                 UnityEngine.Object.DestroyImmediate(savedMatState);
                 AssetDatabase.SaveAssets();
                 if (AssetDatabase.LoadAssetAtPath<Texture2D>(tempCustomFontAsset) != null)
                     AssetDatabase.DeleteAsset(tempCustomFontAsset);
+                if (AssetDatabase.LoadAssetAtPath<Texture2D>(tempCustomFontPage1) != null)
+                    AssetDatabase.DeleteAsset(tempCustomFontPage1);
                 if (tempSkin != null) UnityEngine.Object.DestroyImmediate(tempSkin);
                 if (tempBadge != null) UnityEngine.Object.DestroyImmediate(tempBadge);
                 cam.targetTexture = null;
@@ -574,9 +591,9 @@ namespace EkacBubble.Editor
                         if (Mathf.Abs(baseHeight - 0.62f) > 0.02f || Mathf.Abs(ReadAnimatedFloat("_BaseHeight") - 0.27f) > 0.02f)
                             throw new Exception($"Direct BlendTree _BaseHeight check failed! Height=1->{baseHeight:F3}, Height=0.3->{ReadAnimatedFloat("_BaseHeight"):F3}");
 
-                        // Simulate Bubble 1 (4 chars, slice 0 + slice 1)
-                        animator.SetInteger("EB_C0_Col", 23);
-                        animator.SetInteger("EB_C0_Row", 36); // '你'
+                        // Simulate Bubble 1 (4 chars, slice 0 + slice 1, including 7-bit Page 1 Row=109 e.g. '霆')
+                        animator.SetInteger("EB_C0_Col", 27);
+                        animator.SetInteger("EB_C0_Row", 109); // '霆' (Page 1, 7-bit Row)
                         animator.SetInteger("EB_C1_Col", 12);
                         animator.SetInteger("EB_C1_Row", 20);
                         animator.SetInteger("EB_C2_Col", 5);
@@ -601,8 +618,8 @@ namespace EkacBubble.Editor
                         float s0Len = ReadAnimatedFloat("_S0_Len");
                         float s0Alpha = ReadAnimatedFloat("_S0_Alpha");
                         Debug.Log($"[EkacBubble] BUBBLE1_MAT Col0={s0Col0:F2} Row0={s0Row0:F2} Col3={s0Col3:F2} Len={s0Len:F2} Alpha={s0Alpha:F2}");
-                        if (Mathf.Abs(s0Col0 - 23f) > 0.2f || Mathf.Abs(s0Row0 - 36f) > 0.2f || Mathf.Abs(s0Col3 - 8f) > 0.2f || Mathf.Abs(s0Len - 4f) > 0.2f || s0Alpha < 0.1f)
-                            throw new Exception("Bubble 1 shader parameters did not propagate properly!");
+                        if (Mathf.Abs(s0Col0 - 27f) > 0.25f || Mathf.Abs(s0Row0 - 109f) > 0.25f || Mathf.Abs(s0Col3 - 8f) > 0.25f || Mathf.Abs(s0Len - 4f) > 0.2f || s0Alpha < 0.1f)
+                            throw new Exception($"Bubble 1 shader parameters did not propagate properly! Col0={s0Col0:F2} Row0={s0Row0:F2}");
 
                         // Advance typing until all 4 chars shown
                         for (int f = 0; f < 30; f++) animator.Update(0.04f); // 1.2s
@@ -625,7 +642,7 @@ namespace EkacBubble.Editor
                         float b1ToS1Row0 = ReadAnimatedFloat("_S1_Row00");
                         float b2ToS0Col0 = ReadAnimatedFloat("_S0_Col00");
                         Debug.Log($"[EkacBubble] PUSH2_MAT S1_Col0={b1ToS1Col0:F2} S1_Row0={b1ToS1Row0:F2} S1_Alpha={ReadAnimatedFloat("_S1_Alpha"):F2} S0_Col0={b2ToS0Col0:F2}");
-                        if (Mathf.Abs(b1ToS1Col0 - 23f) > 0.2f || Mathf.Abs(b1ToS1Row0 - 36f) > 0.2f || Mathf.Abs(b2ToS0Col0 - 51f) > 0.2f)
+                        if (Mathf.Abs(b1ToS1Col0 - 27f) > 0.25f || Mathf.Abs(b1ToS1Row0 - 109f) > 0.25f || Mathf.Abs(b2ToS0Col0 - 51f) > 0.25f)
                             throw new Exception("Push Bubble 1 -> Slot 1 failed!");
 
                         // Push Bubble 3 -> Bubble 1 to Slot 2, Bubble 2 to Slot 1!
@@ -642,7 +659,7 @@ namespace EkacBubble.Editor
                         float b2ToS1Col0 = ReadAnimatedFloat("_S1_Col00");
                         float b3ToS0Col0 = ReadAnimatedFloat("_S0_Col00");
                         Debug.Log($"[EkacBubble] PUSH3_MAT S2_Col0={b1ToS2Col0:F2} S1_Col0={b2ToS1Col0:F2} S0_Col0={b3ToS0Col0:F2}");
-                        if (Mathf.Abs(b1ToS2Col0 - 23f) > 0.2f || Mathf.Abs(b2ToS1Col0 - 51f) > 0.2f || Mathf.Abs(b3ToS0Col0 - 37f) > 0.2f)
+                        if (Mathf.Abs(b1ToS2Col0 - 27f) > 0.25f || Mathf.Abs(b2ToS1Col0 - 51f) > 0.25f || Mathf.Abs(b3ToS0Col0 - 37f) > 0.25f)
                             throw new Exception("Push 3rd bubble stack failed!");
 
                         // Wait ~4.0s -> Hold timers (~3.0s) + FadeOut (0.25s) should expire all 3 bubbles!
@@ -705,6 +722,7 @@ namespace EkacBubble.Editor
                         var matSnapshot = ScriptableObject.CreateInstance<EkacBubbleStylePreset>();
                         matSnapshot.CaptureFromMaterial(sharedMat);
                         Texture origAtlas = sharedMat.GetTexture("_AtlasTex");
+                        Texture origAtlas1 = sharedMat.GetTexture("_AtlasTex1");
                         float origBaseHeight = sharedMat.GetFloat("_BaseHeight");
                         try
                         {
@@ -750,6 +768,7 @@ namespace EkacBubble.Editor
                             {
                                 matSnapshot.ApplyToMaterial(restoreMat, false);
                                 restoreMat.SetTexture("_AtlasTex", origAtlas);
+                                restoreMat.SetTexture("_AtlasTex1", origAtlas1);
                                 restoreMat.SetFloat("_BaseHeight", origBaseHeight);
                                 EditorUtility.SetDirty(restoreMat);
                             }
@@ -758,11 +777,24 @@ namespace EkacBubble.Editor
                         }
                         Debug.Log("[EkacBubble] STYLE_PRESERVE_OK");
 
-                        // 4. Verify non-serialized Scene Preview & C# Layout + Glyph Index (4057 glyphs)
+                        // 4. Verify non-serialized Scene Preview & C# Layout + Dual-Page Glyph Index (8089+ glyphs, T2S, Custom Row 127)
                         var checkMat = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
                         int glyphTotal = EkacBubbleFontBaker.LoadedGlyphCount;
-                        if (glyphTotal < 4000)
-                            throw new Exception($"EkacGlyphIndex loaded too few glyphs: {glyphTotal}");
+                        if (glyphTotal < 8000)
+                            throw new Exception($"EkacGlyphIndex loaded too few glyphs for dual-page: {glyphTotal}");
+                        var tingGlyph = EkacBubbleFontBaker.LookupGlyph("霆");
+                        if (tingGlyph.Row < 64)
+                            throw new Exception($"Expected '霆' on Page 1 (Row >= 64), got Row={tingGlyph.Row}");
+                        var tradGlyph = EkacBubbleFontBaker.LookupGlyph("丟");
+                        var simpGlyph = EkacBubbleFontBaker.LookupGlyph("丢");
+                        if (tradGlyph.Col != simpGlyph.Col || tradGlyph.Row != simpGlyph.Row)
+                            throw new Exception("Traditional-to-Simplified fallback check failed for '丟' -> '丢'!");
+                        EkacBubbleFontBaker.SetCustomGlyphs("䴉");
+                        var customGlyph = EkacBubbleFontBaker.LookupGlyph("䴉");
+                        if (customGlyph.Row != 127 || customGlyph.Col != 0)
+                            throw new Exception($"Expected custom glyph '䴉' at (0, 127), got ({customGlyph.Col}, {customGlyph.Row})");
+                        EkacBubbleFontBaker.SetCustomGlyphs("");
+
                         var previewChunks = EkacBubbleFontBaker.LayoutText("今天天气真不错，我们一起去VRChat玩吧！");
                         if (previewChunks.Count != 1 || previewChunks[0].Line1Len <= 0 || previewChunks[0].Line1Len >= previewChunks[0].Len)
                             throw new Exception("C# LayoutText two-line wrap verification failed!");
@@ -772,10 +804,11 @@ namespace EkacBubble.Editor
                         if (checkMat.HasProperty("_EB_PreviewActive"))
                             throw new Exception("_EB_PreviewActive must NOT be serialized on Material!");
                         EkacBubbleScenePreview.ClearGlobals();
-                        Debug.Log($"[EkacBubble] PREVIEW_AND_INDEX_OK glyphs={glyphTotal}");
+                        Debug.Log($"[EkacBubble] PREVIEW_AND_INDEX_OK glyphs={glyphTotal} ting=({tingGlyph.Col},{tingGlyph.Row})");
 
-                        // 5. Verify pure C# EkacBubbleFontBaker on BOTH ASCII and non-ASCII/Chinese paths
+                        // 5. Verify pure C# EkacBubbleFontBaker dual-page baking on non-ASCII/Chinese paths
                         byte[] defaultAtlasBytes = File.ReadAllBytes(Path.GetFullPath(AtlasPath));
+                        byte[] defaultAtlasP1Bytes = File.ReadAllBytes(Path.GetFullPath(AtlasPage1Path));
                         string userRuanTangPath = Path.GetFullPath("Assets/上首软糖体.ttf");
                         if (File.Exists(userRuanTangPath))
                         {
@@ -787,28 +820,37 @@ namespace EkacBubble.Editor
                                 40,
                                 0,
                                 null,
-                                false
+                                false,
+                                "䴉𠮷"
                             );
-                            if (bakedRuanTang == null || bakedRuanTang.width != 4096 || bakedRuanTang.height != 4096)
-                                throw new Exception("上首软糖体_SDF output texture invalid!");
-                            if (rtReport.PrimaryRenderedCount < 4000)
-                                throw new Exception($"上首软糖体 primary glyph count too low: {rtReport.PrimaryRenderedCount}");
+                            if (bakedRuanTang == null || bakedRuanTang.width != 4096 || bakedRuanTang.height != 4096 ||
+                                rtReport.TexturePage1 == null || rtReport.TexturePage1.width != 4096 || rtReport.TexturePage1.height != 4096)
+                                throw new Exception("上首软糖体 dual-page SDF output texture invalid!");
+                            if (rtReport.PrimaryRenderedCount < 6763)
+                                throw new Exception($"上首软糖体 primary glyph count too low for dual-page GB2312: {rtReport.PrimaryRenderedCount}");
+                            if (rtReport.CustomRenderedCount < 2)
+                                throw new Exception($"Expected >=2 custom glyphs (䴉, 𠮷) baked on Row 127, got {rtReport.CustomRenderedCount}");
+                            if (EkacBubbleFontBaker.CustomGlyphCount != 0)
+                                throw new Exception("BakeFontAtlas mutated global static CustomGlyphCount!");
                             byte[] bakedBytes = File.ReadAllBytes(Path.GetFullPath(ruanTangOutAsset));
-                            if (bakedBytes.Length < 500_000)
-                                throw new Exception($"上首软糖体 PNG unexpectedly small: {bakedBytes.Length} bytes");
-                            if (bakedBytes.SequenceEqual(defaultAtlasBytes))
-                                throw new Exception("上首软糖体_SDF.png is identical to default EkacGlyphAtlas.png (silent fallback bug)!");
+                            byte[] bakedP1Bytes = File.ReadAllBytes(Path.GetFullPath(rtReport.OutputPage1AssetPath));
+                            if (bakedBytes.Length < 500_000 || bakedP1Bytes.Length < 500_000)
+                                throw new Exception($"上首软糖体 PNG unexpectedly small: P0={bakedBytes.Length}, P1={bakedP1Bytes.Length}");
+                            if (bakedBytes.SequenceEqual(defaultAtlasBytes) || bakedP1Bytes.SequenceEqual(defaultAtlasP1Bytes))
+                                throw new Exception("上首软糖体_SDF PNG is identical to default atlas (silent fallback bug)!");
 
                             var projectMat = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
                             if (projectMat != null)
                             {
                                 projectMat.SetTexture("_AtlasTex", bakedRuanTang);
+                                projectMat.SetTexture("_AtlasTex1", rtReport.TexturePage1);
                                 EditorUtility.SetDirty(projectMat);
                                 AssetDatabase.SaveAssets();
                             }
                             Debug.Log(
                                 $"[EkacBubble] FONT_BAKER_UNICODE_OK font=上首软糖体.ttf primary={rtReport.PrimaryRenderedCount} " +
-                                $"fallback={rtReport.FallbackRenderedCount} unmatched={rtReport.MissingCount} sizeKB={bakedBytes.Length / 1024}"
+                                $"fallback={rtReport.FallbackRenderedCount} custom={rtReport.CustomRenderedCount} unmatched={rtReport.MissingCount} " +
+                                $"sizeKB=({bakedBytes.Length / 1024},{bakedP1Bytes.Length / 1024})"
                             );
                         }
                         else
@@ -821,6 +863,7 @@ namespace EkacBubble.Editor
                             {
                                 string unicodeFontCopy = Path.GetFullPath(RootDir + "/Generated/_测试中文路径字体" + Path.GetExtension(sysFont));
                                 string tempAtlasAsset = RootDir + "/Generated/_VerifyTempFont_SDF.png";
+                                string tempAtlasP1Asset = EkacBubbleFontBaker.DerivePage1AssetPath(tempAtlasAsset);
                                 try
                                 {
                                     File.Copy(sysFont, unicodeFontCopy, true);
@@ -831,11 +874,13 @@ namespace EkacBubble.Editor
                                         40,
                                         0,
                                         null,
-                                        false
+                                        false,
+                                        "䴉"
                                     );
-                                    if (bakedTex == null || bakedTex.width != 4096 || bakedTex.height != 4096)
-                                        throw new Exception("FontBaker output texture invalid!");
-                                    if (sysReport.PrimaryRenderedCount < 3000)
+                                    if (bakedTex == null || bakedTex.width != 4096 || bakedTex.height != 4096 ||
+                                        sysReport.TexturePage1 == null || sysReport.TexturePage1.width != 4096)
+                                        throw new Exception("FontBaker dual-page output texture invalid!");
+                                    if (sysReport.PrimaryRenderedCount < 6000)
                                         throw new Exception($"Unicode-path FontBaker primary count too low: {sysReport.PrimaryRenderedCount}");
                                     byte[] bakedBytes = File.ReadAllBytes(Path.GetFullPath(tempAtlasAsset));
                                     if (bakedBytes.SequenceEqual(defaultAtlasBytes))
@@ -846,6 +891,7 @@ namespace EkacBubble.Editor
                                 {
                                     try { if (File.Exists(unicodeFontCopy)) File.Delete(unicodeFontCopy); } catch { }
                                     AssetDatabase.DeleteAsset(tempAtlasAsset);
+                                    AssetDatabase.DeleteAsset(tempAtlasP1Asset);
                                 }
                             }
                         }
@@ -911,9 +957,9 @@ namespace EkacBubble.Editor
             try
             {
                 EkacBubbleScenePreview.SlotCount = 3;
-                EkacBubbleScenePreview.SetSlotText(0, "上首软糖体烘焙成功啦！");
-                EkacBubbleScenePreview.SetSlotText(1, "中文路径与文件名现已完美支持～");
-                EkacBubbleScenePreview.SetSlotText(2, "圆润Q弹字形，零额外同步参数！");
+                EkacBubbleScenePreview.SetSlotText(0, "雷霆万钧！尴尬氪金也炫酷～");
+                EkacBubbleScenePreview.SetSlotText(1, "繁體龍愛電與桜沢駅都支持！");
+                EkacBubbleScenePreview.SetSlotText(2, "双页 4K 字库 8089 字已就绪喵");
                 EkacBubbleScenePreview.IsActive = true;
                 EkacBubbleScenePreview.PushPreviewBuffers();
 
@@ -966,10 +1012,16 @@ namespace EkacBubble.Editor
 
         private static void ConfigureAtlasTexture()
         {
-            AssetDatabase.ImportAsset(AtlasPath, ImportAssetOptions.ForceUpdate);
-            var importer = AssetImporter.GetAtPath(AtlasPath) as TextureImporter;
+            ConfigureSingleAtlas(AtlasPath);
+            ConfigureSingleAtlas(AtlasPage1Path);
+        }
+
+        private static void ConfigureSingleAtlas(string path)
+        {
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
             if (importer == null)
-                throw new Exception("Missing font atlas at " + AtlasPath);
+                throw new Exception("Missing font atlas at " + path);
 
             importer.textureType = TextureImporterType.SingleChannel;
             importer.sRGBTexture = false;
@@ -1031,9 +1083,12 @@ namespace EkacBubble.Editor
             var shader = AssetDatabase.LoadAssetAtPath<Shader>(ShaderPath);
             if (shader == null)
                 throw new Exception("Missing shader at " + ShaderPath);
-            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(AtlasPath);
-            if (tex == null)
+            var tex0 = AssetDatabase.LoadAssetAtPath<Texture2D>(AtlasPath);
+            if (tex0 == null)
                 throw new Exception("Missing texture at " + AtlasPath);
+            var tex1 = AssetDatabase.LoadAssetAtPath<Texture2D>(AtlasPage1Path);
+            if (tex1 == null)
+                throw new Exception("Missing texture at " + AtlasPage1Path);
 
             var mat = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
             bool isNew = (mat == null);
@@ -1041,7 +1096,8 @@ namespace EkacBubble.Editor
             {
                 mat = new Material(shader);
                 AssetDatabase.CreateAsset(mat, MaterialPath);
-                mat.SetTexture("_AtlasTex", tex);
+                mat.SetTexture("_AtlasTex", tex0);
+                mat.SetTexture("_AtlasTex1", tex1);
                 EkacBubbleStylePreset.ApplyBuiltInPreset(mat, EkacBuiltInPreset.SakuraPink, false);
                 mat.SetFloat("_BaseHeight", 0.28f);
                 mat.SetFloat("_BubbleScale", 1.0f);
@@ -1049,9 +1105,25 @@ namespace EkacBubble.Editor
             else
             {
                 mat.shader = shader;
-                if (mat.GetTexture("_AtlasTex") == null)
+                var cur0 = mat.GetTexture("_AtlasTex");
+                if (cur0 == null)
                 {
-                    mat.SetTexture("_AtlasTex", tex);
+                    cur0 = tex0;
+                    mat.SetTexture("_AtlasTex", tex0);
+                }
+                string p0 = cur0 != null ? AssetDatabase.GetAssetPath(cur0) : "";
+                if (cur0 != tex0 && !string.IsNullOrEmpty(p0))
+                {
+                    string siblingP1 = EkacBubbleFontBaker.DerivePage1AssetPath(p0);
+                    var texP1 = !string.IsNullOrEmpty(siblingP1) ? AssetDatabase.LoadAssetAtPath<Texture2D>(siblingP1) : null;
+                    if (texP1 != null)
+                        mat.SetTexture("_AtlasTex1", texP1);
+                    else if (mat.GetTexture("_AtlasTex1") == null)
+                        mat.SetTexture("_AtlasTex1", tex1);
+                }
+                else if (mat.GetTexture("_AtlasTex1") == null)
+                {
+                    mat.SetTexture("_AtlasTex1", tex1);
                 }
             }
 
@@ -1449,7 +1521,7 @@ namespace EkacBubble.Editor
                     if (k < MaxChars)
                     {
                         CopyRange(wd, $"EB_C{c}_Col", $"EB_S0_Col{k:D2}", 0f, 63f, 0f, 1f);
-                        CopyRange(wd, $"EB_C{c}_Row", $"EB_S0_Row{k:D2}", 0f, 63f, 0f, 1f);
+                        CopyRange(wd, $"EB_C{c}_Row", $"EB_S0_Row{k:D2}", 0f, 127f, 0f, 1f);
                     }
                 }
                 CopyParam(wd, "EB_Len", "EB_S0_Len");
@@ -1786,7 +1858,7 @@ namespace EkacBubble.Editor
                 for (int k = 0; k < MaxChars; k++)
                 {
                     AddDirect($"EB_S{s}_Col{k:D2}", $"_S{s}_Col{k:D2}", 63.0f);
-                    AddDirect($"EB_S{s}_Row{k:D2}", $"_S{s}_Row{k:D2}", 63.0f);
+                    AddDirect($"EB_S{s}_Row{k:D2}", $"_S{s}_Row{k:D2}", 127.0f);
                 }
             }
 
@@ -1845,7 +1917,7 @@ namespace EkacBubble.Editor
             mergeAnim.pathMode = MergeAnimatorPathMode.Relative;
             mergeAnim.matchAvatarWriteDefaults = true;
 
-            // 5. ModularAvatarParameters (82 synced bits)
+            // 5. ModularAvatarParameters (83 synced bits)
             var maParams = root.AddComponent<ModularAvatarParameters>();
             void RegParam(string pName, ParameterSyncType syncType, int bitWidth = 8, ParameterRepresentation rep = ParameterRepresentation.Default, float defVal = 0f, bool saved = false)
             {
@@ -1866,7 +1938,7 @@ namespace EkacBubble.Editor
             for (int c = 0; c < SliceSize; c++)
             {
                 RegParam($"EB_C{c}_Col", ParameterSyncType.Int, 6, ParameterRepresentation.Unsigned, 0f, false);
-                RegParam($"EB_C{c}_Row", ParameterSyncType.Int, 6, ParameterRepresentation.Unsigned, 0f, false);
+                RegParam($"EB_C{c}_Row", ParameterSyncType.Int, 7, ParameterRepresentation.Unsigned, 0f, false);
             }
             RegParam("EB_Slice", ParameterSyncType.Int, 3, ParameterRepresentation.Unsigned, 0f, false);
             RegParam("EB_Seq", ParameterSyncType.Int, 2, ParameterRepresentation.Unsigned, 0f, false);

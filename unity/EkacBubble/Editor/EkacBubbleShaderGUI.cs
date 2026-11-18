@@ -184,7 +184,8 @@ namespace EkacBubble.Editor
             if (_foldText)
             {
                 EditorGUI.indentLevel++;
-                DrawProp(materialEditor, Find("_AtlasTex"), "SDF 字库贴图 (4096x4096)");
+                DrawProp(materialEditor, Find("_AtlasTex"), "SDF 字库第 1 页 (4096x4096)");
+                DrawProp(materialEditor, Find("_AtlasTex1"), "SDF 字库第 2 页 (扩展字 4096x4096)");
                 DrawProp(materialEditor, Find("_TextColor"), "文字主色 (顶部)");
                 DrawProp(materialEditor, Find("_TextColor2"), "文字副色 (底部)");
                 DrawProp(materialEditor, Find("_TextGradient"), "文字垂直渐变");

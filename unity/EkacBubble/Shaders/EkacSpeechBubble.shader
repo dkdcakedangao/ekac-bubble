@@ -2,7 +2,8 @@ Shader "EkacBubble/SpeechBubble"
 {
     Properties
     {
-        _AtlasTex ("Glyph SDF Atlas (4096x4096)", 2D) = "black" {}
+        _AtlasTex ("Glyph SDF Atlas Page 0 (4096x4096)", 2D) = "black" {}
+        _AtlasTex1 ("Glyph SDF Atlas Page 1 (4096x4096)", 2D) = "black" {}
         [NoScaleOffset] _SkinTex ("9-Slice Frame Skin (RGBA)", 2D) = "white" {}
         [NoScaleOffset] _BadgeTex ("Corner Badge / Sticker (RGBA)", 2D) = "black" {}
 
@@ -196,6 +197,7 @@ Shader "EkacBubble/SpeechBubble"
             #define EM_SIZE 0.055
 
             sampler2D _AtlasTex;
+            sampler2D _AtlasTex1;
             sampler2D _SkinTex;
             sampler2D _BadgeTex;
 
@@ -360,6 +362,20 @@ Shader "EkacBubble/SpeechBubble"
                 if (outA < 1e-5) return fixed4(0, 0, 0, 0);
                 fixed3 outRgb = (over.rgb * over.a + under.rgb * under.a * (1.0 - over.a)) / outA;
                 return fixed4(outRgb, saturate(outA));
+            }
+
+            float SampleAtlasSDF(float col, float row, float2 cellUV, float2 ddxChar, float2 ddyChar)
+            {
+                float2 clampedCell = clamp(cellUV, 2.5 / 64.0, 1.0 - 2.5 / 64.0);
+                float page = step(63.5, row);
+                float localRow = clamp(row - page * 64.0, 0.0, 63.0);
+                float2 atlasUV = float2(
+                    (clamp(col, 0.0, 63.0) + clampedCell.x) / 64.0,
+                    ((63.0 - localRow) + clampedCell.y) / 64.0
+                );
+                if (page < 0.5)
+                    return tex2Dgrad(_AtlasTex, atlasUV, ddxChar, ddyChar).r;
+                return tex2Dgrad(_AtlasTex1, atlasUV, ddxChar, ddyChar).r;
             }
 
             float GlyphAdvance(float col, float row)
@@ -620,12 +636,7 @@ Shader "EkacBubble/SpeechBubble"
 
                                     if (inShadow)
                                     {
-                                        float2 shCell = clamp(shCellRaw, 2.5 / 64.0, 1.0 - 2.5 / 64.0);
-                                        float2 shUV = float2(
-                                            (gc + shCell.x) / 64.0,
-                                            ((63.0 - gr) + shCell.y) / 64.0
-                                        );
-                                        float sdfSh = tex2Dgrad(_AtlasTex, shUV, ddxChar, ddyChar).r;
+                                        float sdfSh = SampleAtlasSDF(gc, gr, shCellRaw, ddxChar, ddyChar);
                                         float shSoft = max(_TextShadowSoftness, edgeW);
                                         float shEdge = center - _TextOutlineWidth;
                                         float shMask = smoothstep(shEdge - shSoft, shEdge + shSoft, sdfSh) * _TextShadowColor.a * wt * textClipMask;
@@ -637,12 +648,7 @@ Shader "EkacBubble/SpeechBubble"
 
                                     if (inMain)
                                     {
-                                        float2 clampedCell = clamp(cellUV, 2.5 / 64.0, 1.0 - 2.5 / 64.0);
-                                        float2 atlasUV = float2(
-                                            (gc + clampedCell.x) / 64.0,
-                                            ((63.0 - gr) + clampedCell.y) / 64.0
-                                        );
-                                        float sdf = tex2Dgrad(_AtlasTex, atlasUV, ddxChar, ddyChar).r;
+                                        float sdf = SampleAtlasSDF(gc, gr, cellUV, ddxChar, ddyChar);
                                         float fillMask = smoothstep(center - edgeW, center + edgeW, sdf);
                                         float tGrad = saturate((1.0 - cellUV.y) * _TextGradient);
                                         fixed4 fillCol = lerp(_TextColor, _TextColor2, tGrad);

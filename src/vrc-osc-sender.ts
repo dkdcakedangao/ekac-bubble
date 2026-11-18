@@ -125,7 +125,7 @@ export class VrcBubbleOscSender {
     if (this.closed || chunk.len <= 0) return;
     this.stopTimers();
     const token = ++this.activeToken;
-    // Matches Unity Receiver FSM: EB_Gen 1..7 (3-bit), EB_Seq 1..3 (2-bit)
+    // Matches Unity Receiver FSM: EB_Gen 1..7 (3-bit), EB_Seq 1..3 (2-bit), Col 6-bit (0..63), Row 7-bit (0..127)
     this.gen = (this.gen % 7) + 1;
     const currentGen = this.gen;
     const numSlices = Math.max(1, Math.min(8, Math.ceil(chunk.len / 3)));

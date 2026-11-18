@@ -33,9 +33,12 @@ namespace EkacBubble.Editor
     public struct EkacFontBakeReport
     {
         public Texture2D Texture;
+        public Texture2D TexturePage1;
         public string OutputAssetPath;
+        public string OutputPage1AssetPath;
         public int PrimaryRenderedCount;
         public int FallbackRenderedCount;
+        public int CustomRenderedCount;
         public int MissingCount;
     }
 
@@ -46,6 +49,8 @@ namespace EkacBubble.Editor
 
         public const int AtlasSize = 4096;
         public const int Grid = 64;
+        public const int Pages = 2;
+        public const int TotalRows = Grid * Pages; // 128
         public const int Cell = 64;
         public const int DefaultPointSize = 40;
         public const int DefaultBaselineFromBottom = 17; // Matches 64 - 47 from generate-font-atlas.py
@@ -67,8 +72,17 @@ namespace EkacBubble.Editor
 
         private static Dictionary<string, EkacGlyphEntry> _cachedMap;
         private static List<EkacGlyphEntry> _cachedList;
+        private static Dictionary<string, string> _t2sMap;
+        private static readonly Dictionary<string, EkacGlyphEntry> _customMap = new Dictionary<string, EkacGlyphEntry>();
+        private static readonly List<EkacGlyphEntry> _customList = new List<EkacGlyphEntry>();
+        private static int _customRow = 127;
+        private static int _customCapacity = 64;
         private static EkacGlyphEntry _fallbackEntry = new EkacGlyphEntry { Ch = "\u25a1", Col = 0, Row = 2, Advance = 1.0f };
         private static EkacGlyphEntry _spaceEntry = new EkacGlyphEntry { Ch = " ", Col = 1, Row = 0, Advance = 0.36f };
+
+        public static int CustomRow => _customRow;
+        public static int CustomCapacity => _customCapacity;
+        public static int CustomGlyphCount => _customList.Count;
 
         public static void EnsureIndexLoaded(bool forceReload = false)
         {
@@ -79,7 +93,16 @@ namespace EkacBubble.Editor
                 throw new FileNotFoundException("Missing glyph index JSON at " + GlyphIndexPath, fullPath);
 
             string json = File.ReadAllText(fullPath, Encoding.UTF8);
-            ParseGlyphIndexJson(json, out _cachedMap, out _cachedList, out _fallbackEntry, out _spaceEntry);
+            ParseGlyphIndexJson(
+                json,
+                out _cachedMap,
+                out _cachedList,
+                out _t2sMap,
+                out _customRow,
+                out _customCapacity,
+                out _fallbackEntry,
+                out _spaceEntry
+            );
         }
 
         public static int LoadedGlyphCount
@@ -91,11 +114,98 @@ namespace EkacBubble.Editor
             }
         }
 
+        public static List<string> SetCustomGlyphs(string rawChars)
+        {
+            EnsureIndexLoaded();
+            var entries = BuildCustomGlyphEntries(rawChars);
+            _customMap.Clear();
+            _customList.Clear();
+            var assigned = new List<string>(entries.Count);
+            foreach (var entry in entries)
+            {
+                _customMap[entry.Ch] = entry;
+                _customList.Add(entry);
+                assigned.Add(entry.Ch);
+            }
+            return assigned;
+        }
+
+        private static List<EkacGlyphEntry> BuildCustomGlyphEntries(string rawChars)
+        {
+            EnsureIndexLoaded();
+            var entries = new List<EkacGlyphEntry>();
+            if (string.IsNullOrEmpty(rawChars)) return entries;
+
+            var seen = new HashSet<string>();
+            for (int i = 0; i < rawChars.Length; i++)
+            {
+                string ch;
+                if (char.IsHighSurrogate(rawChars[i]) && i + 1 < rawChars.Length && char.IsLowSurrogate(rawChars[i + 1]))
+                {
+                    ch = rawChars.Substring(i, 2);
+                    i++;
+                }
+                else if (char.IsSurrogate(rawChars[i]))
+                {
+                    continue; // Skip unpaired UTF-16 surrogate
+                }
+                else
+                {
+                    ch = rawChars[i].ToString();
+                }
+
+                if (string.IsNullOrWhiteSpace(ch) || (ch.Length == 1 && ch[0] < 0x20)) continue;
+                if (!seen.Add(ch)) continue;
+                if (_cachedMap.ContainsKey(ch)) continue;
+                if (entries.Count >= _customCapacity) continue;
+
+                entries.Add(new EkacGlyphEntry
+                {
+                    Ch = ch,
+                    Col = entries.Count,
+                    Row = _customRow,
+                    Advance = 1.0f
+                });
+            }
+            return entries;
+        }
+
+        private static string NormalizeFullwidthAscii(string ch)
+        {
+            if (ch == "\u3000") return " ";
+            if (ch != null && ch.Length == 1)
+            {
+                char c = ch[0];
+                if (c >= '\uFF01' && c <= '\uFF5E')
+                {
+                    return ((char)(c - 0xFEE0)).ToString();
+                }
+            }
+            return ch;
+        }
+
         public static EkacGlyphEntry LookupGlyph(string ch)
         {
             EnsureIndexLoaded();
             if (ch == " ") return _spaceEntry;
-            return _cachedMap.TryGetValue(ch, out var e) ? e : _fallbackEntry;
+            if (_cachedMap.TryGetValue(ch, out var e)) return e;
+            if (_customMap.TryGetValue(ch, out var ce)) return ce;
+
+            if (_t2sMap != null && _t2sMap.TryGetValue(ch, out string simp))
+            {
+                if (_cachedMap.TryGetValue(simp, out var se)) return se;
+                if (_customMap.TryGetValue(simp, out var sce)) return sce;
+            }
+
+            string half = NormalizeFullwidthAscii(ch);
+            if (half != ch)
+            {
+                if (half == " ") return _spaceEntry;
+                if (_cachedMap.TryGetValue(half, out var he)) return he;
+                if (_customMap.TryGetValue(half, out var hce)) return hce;
+            }
+
+            return _fallbackEntry;
         }
 
         private static bool IsAsciiWordChar(string ch)
@@ -469,7 +579,8 @@ namespace EkacBubble.Editor
             int pointSize = DefaultPointSize,
             int baselineOffset = 0,
             string customFallbackFontPath = null,
-            bool showProgressBar = false)
+            bool showProgressBar = false,
+            string customRequiredChars = null)
         {
             return BakeFontAtlas(
                 primaryFontPath,
@@ -478,8 +589,20 @@ namespace EkacBubble.Editor
                 pointSize,
                 baselineOffset,
                 customFallbackFontPath,
-                showProgressBar
+                showProgressBar,
+                customRequiredChars
             );
+        }
+
+        public static string DerivePage1AssetPath(string page0AssetPath)
+        {
+            if (string.IsNullOrEmpty(page0AssetPath)) return null;
+            string dir = Path.GetDirectoryName(page0AssetPath)?.Replace('\\', '/');
+            string stem = Path.GetFileNameWithoutExtension(page0AssetPath);
+            string ext = Path.GetExtension(page0AssetPath);
+            if (string.IsNullOrEmpty(ext)) ext = ".png";
+            string fileName = stem + "_P1" + ext;
+            return string.IsNullOrEmpty(dir) ? fileName : $"{dir}/{fileName}";
         }
 
         public static Texture2D BakeFontAtlas(
@@ -489,13 +612,17 @@ namespace EkacBubble.Editor
             int pointSize = DefaultPointSize,
             int baselineOffset = 0,
             string customFallbackFontPath = null,
-            bool showProgressBar = false)
+            bool showProgressBar = false,
+            string customRequiredChars = null)
         {
             report = default;
             if (string.IsNullOrEmpty(primaryFontPath) || !File.Exists(primaryFontPath))
                 throw new FileNotFoundException("找不到所选主字体文件：" + primaryFontPath);
 
             EnsureIndexLoaded();
+            var customEntries = customRequiredChars != null
+                ? BuildCustomGlyphEntries(customRequiredChars)
+                : new List<EkacGlyphEntry>();
             pointSize = Mathf.Clamp(pointSize, 20, 56);
 
             string fullPrimaryPath = Path.GetFullPath(primaryFontPath);
@@ -510,6 +637,7 @@ namespace EkacBubble.Editor
                 string parentDir = Path.GetDirectoryName(outputAssetPath)?.Replace('\\', '/');
                 if (!string.IsNullOrEmpty(parentDir)) EnsureAssetDir(parentDir);
             }
+            string outputPage1AssetPath = DerivePage1AssetPath(outputAssetPath);
 
             // Build deduplicated font cascade (index 0 is ALWAYS primaryFontPath)
             var fontPaths = new List<string> { fullPrimaryPath };
@@ -530,6 +658,8 @@ namespace EkacBubble.Editor
             AddCandidate(Path.Combine(winFonts, "msyh.ttc"));
             AddCandidate(Path.Combine(winFonts, "YuGothM.ttc"));
             AddCandidate(Path.Combine(winFonts, "simhei.ttf"));
+            AddCandidate(Path.Combine(winFonts, "simsunb.ttf"));
+            AddCandidate(Path.Combine(winFonts, "simsunextg.ttf"));
 
             MethodInfo packBatchMethod = typeof(FontEngine).GetMethod(
                 "TryPackGlyphsInAtlas",
@@ -564,16 +694,23 @@ namespace EkacBubble.Editor
             if (err != FontEngineError.Success)
                 throw new Exception("Failed to initialize Unity FontEngine: " + err);
 
-            var outColors = new Color32[AtlasSize * AtlasSize];
-            var remaining = new List<EkacGlyphEntry>(_cachedList.Count);
+            var outColorsPage0 = new Color32[AtlasSize * AtlasSize];
+            var outColorsPage1 = new Color32[AtlasSize * AtlasSize];
+            var remaining = new List<EkacGlyphEntry>(_cachedList.Count + customEntries.Count);
             foreach (var ge in _cachedList)
             {
                 if (string.IsNullOrEmpty(ge.Ch) || ge.Ch == " " || ge.Ch == "\u3000") continue;
                 remaining.Add(ge);
             }
+            foreach (var ce in customEntries)
+            {
+                if (string.IsNullOrEmpty(ce.Ch) || ce.Ch == " " || ce.Ch == "\u3000") continue;
+                remaining.Add(ce);
+            }
 
             int primaryRendered = 0;
             int fallbackRendered = 0;
+            int customRendered = 0;
             try
             {
                 const int PackDim = 4096;
@@ -608,7 +745,13 @@ namespace EkacBubble.Editor
                         var byGlyphIdx = new Dictionary<uint, List<EkacGlyphEntry>>();
                         foreach (var ge in remaining)
                         {
-                            uint cp = (uint)char.ConvertToUtf32(ge.Ch, 0);
+                            uint cp;
+                            if (ge.Ch.Length >= 2 && char.IsSurrogatePair(ge.Ch, 0))
+                                cp = (uint)char.ConvertToUtf32(ge.Ch, 0);
+                            else if (ge.Ch.Length == 1 && !char.IsSurrogate(ge.Ch[0]))
+                                cp = ge.Ch[0];
+                            else
+                                continue;
                             if (FontEngine.TryGetGlyphIndex(cp, out uint gIdx) && gIdx != 0 && (notdefIdx == 0 || gIdx != notdefIdx))
                             {
                                 if (!byGlyphIdx.TryGetValue(gIdx, out var list))
@@ -636,7 +779,7 @@ namespace EkacBubble.Editor
                                 if (showProgressBar)
                                 {
                                     EditorUtility.DisplayProgressBar(
-                                        "烘焙 SDF 字库贴图",
+                                        "烘焙双页 4K SDF 字库贴图",
                                         $"正在渲染 {Path.GetFileName(fPath)} ({offset + count}/{uniqueGlyphIds.Count})...",
                                         (float)(offset + count) / Mathf.Max(1, uniqueGlyphIds.Count)
                                     );
@@ -706,7 +849,7 @@ namespace EkacBubble.Editor
                                         PackDim
                                     });
 
-                                    // Blit each rendered SDF glyph patch (with its SdfSpreadPx halo) centered onto its target 64x64 cell
+                                    // Blit each rendered SDF glyph patch (with its SdfSpreadPx halo) centered onto its target 64x64 cell on Page 0 or Page 1
                                     foreach (var glyph in glyphsPacked)
                                     {
                                         if (!byGlyphIdx.TryGetValue(glyph.index, out var targets))
@@ -727,15 +870,22 @@ namespace EkacBubble.Editor
 
                                         foreach (var ge in targets)
                                         {
+                                            if (ge.Row < 0 || ge.Row >= TotalRows || ge.Col < 0 || ge.Col >= Grid)
+                                                continue;
+
                                             int cellKey = ge.Row * Grid + ge.Col;
                                             if (renderedCellKeys.Add(cellKey))
                                             {
                                                 if (isPrimary) primaryRendered++;
                                                 else fallbackRendered++;
+                                                if (ge.Row == _customRow) customRendered++;
                                             }
 
+                                            bool isPage1 = ge.Row >= Grid;
+                                            int localRow = isPage1 ? (ge.Row - Grid) : ge.Row;
+                                            Color32[] targetColors = isPage1 ? outColorsPage1 : outColorsPage0;
                                             int dstBaseX = ge.Col * Cell;
-                                            int dstBaseY = (Grid - 1 - ge.Row) * Cell;
+                                            int dstBaseY = (Grid - 1 - localRow) * Cell;
 
                                             for (int cy = 0; cy < Cell; cy++)
                                             {
@@ -758,7 +908,7 @@ namespace EkacBubble.Editor
                                                     {
                                                         if (val > 64) val = 64; // Prevent cross-cell mip bleed
                                                     }
-                                                    outColors[dstRowOff + cx] = new Color32(val, val, val, val);
+                                                    targetColors[dstRowOff + cx] = new Color32(val, val, val, val);
                                                 }
                                             }
                                         }
@@ -792,13 +942,40 @@ namespace EkacBubble.Editor
                 if (showProgressBar) EditorUtility.ClearProgressBar();
             }
 
+            WriteAtlasPng(outColorsPage0, outputAssetPath);
+            WriteAtlasPng(outColorsPage1, outputPage1AssetPath);
+            ConfigureSdfTextureAsset(outputAssetPath);
+            ConfigureSdfTextureAsset(outputPage1AssetPath);
+
+            var imported0 = AssetDatabase.LoadAssetAtPath<Texture2D>(outputAssetPath);
+            var imported1 = AssetDatabase.LoadAssetAtPath<Texture2D>(outputPage1AssetPath);
+            report = new EkacFontBakeReport
+            {
+                Texture = imported0,
+                TexturePage1 = imported1,
+                OutputAssetPath = outputAssetPath,
+                OutputPage1AssetPath = outputPage1AssetPath,
+                PrimaryRenderedCount = primaryRendered,
+                FallbackRenderedCount = fallbackRendered,
+                CustomRenderedCount = customRendered,
+                MissingCount = remaining.Count
+            };
+            Debug.Log(
+                $"[EkacBubble] Baked dual-page SDF font atlas: {outputAssetPath} + {outputPage1AssetPath} " +
+                $"(primary={primaryRendered}, fallback={fallbackRendered}, custom={customRendered}, unmatched={remaining.Count})"
+            );
+            return imported0;
+        }
+
+        private static void WriteAtlasPng(Color32[] pixels, string assetPath)
+        {
             var tex = new Texture2D(AtlasSize, AtlasSize, TextureFormat.R8, false, true);
             try
             {
-                tex.SetPixels32(outColors);
+                tex.SetPixels32(pixels);
                 tex.Apply(false, false);
                 byte[] pngBytes = tex.EncodeToPNG();
-                string diskOutPath = Path.GetFullPath(outputAssetPath);
+                string diskOutPath = Path.GetFullPath(assetPath);
                 string diskDir = Path.GetDirectoryName(diskOutPath);
                 if (!string.IsNullOrEmpty(diskDir)) Directory.CreateDirectory(diskDir);
                 File.WriteAllBytes(diskOutPath, pngBytes);
@@ -807,22 +984,6 @@ namespace EkacBubble.Editor
             {
                 UnityEngine.Object.DestroyImmediate(tex);
             }
-
-            ConfigureSdfTextureAsset(outputAssetPath);
-            var imported = AssetDatabase.LoadAssetAtPath<Texture2D>(outputAssetPath);
-            report = new EkacFontBakeReport
-            {
-                Texture = imported,
-                OutputAssetPath = outputAssetPath,
-                PrimaryRenderedCount = primaryRendered,
-                FallbackRenderedCount = fallbackRendered,
-                MissingCount = remaining.Count
-            };
-            Debug.Log(
-                $"[EkacBubble] Baked custom SDF font atlas: {outputAssetPath} " +
-                $"(primary={primaryRendered}, fallback={fallbackRendered}, unmatched={remaining.Count})"
-            );
-            return imported;
         }
 
         public static void ConfigureSdfTextureAsset(string assetPath)
@@ -887,11 +1048,17 @@ namespace EkacBubble.Editor
             string json,
             out Dictionary<string, EkacGlyphEntry> map,
             out List<EkacGlyphEntry> list,
+            out Dictionary<string, string> t2sMap,
+            out int customRow,
+            out int customCapacity,
             out EkacGlyphEntry fallback,
             out EkacGlyphEntry space)
         {
-            map = new Dictionary<string, EkacGlyphEntry>(4200);
-            list = new List<EkacGlyphEntry>(4200);
+            map = new Dictionary<string, EkacGlyphEntry>(8200);
+            list = new List<EkacGlyphEntry>(8200);
+            t2sMap = new Dictionary<string, string>(2000);
+            customRow = 127;
+            customCapacity = 64;
             fallback = new EkacGlyphEntry { Ch = "\u25a1", Col = 0, Row = 2, Advance = 1.0f };
             space = new EkacGlyphEntry { Ch = " ", Col = 1, Row = 0, Advance = 0.36f };
 
@@ -1009,7 +1176,36 @@ namespace EkacBubble.Editor
                 SkipWs();
                 if (json[i] == ':') i++;
 
-                if (key == "fallback")
+                if (key == "customRow")
+                {
+                    customRow = Mathf.RoundToInt(ReadNumber());
+                }
+                else if (key == "customCapacity")
+                {
+                    customCapacity = Mathf.RoundToInt(ReadNumber());
+                }
+                else if (key == "t2sPairs")
+                {
+                    string pairs = ReadString();
+                    var cps = new List<string>(pairs.Length);
+                    for (int pi = 0; pi < pairs.Length; pi++)
+                    {
+                        if (char.IsHighSurrogate(pairs[pi]) && pi + 1 < pairs.Length && char.IsLowSurrogate(pairs[pi + 1]))
+                        {
+                            cps.Add(pairs.Substring(pi, 2));
+                            pi++;
+                        }
+                        else
+                        {
+                            cps.Add(pairs[pi].ToString());
+                        }
+                    }
+                    for (int pi = 0; pi + 1 < cps.Count; pi += 2)
+                    {
+                        t2sMap[cps[pi]] = cps[pi + 1];
+                    }
+                }
+                else if (key == "fallback")
                 {
                     var t = ReadTriple();
                     fallback = new EkacGlyphEntry { Ch = "\u25a1", Col = t.col, Row = t.row, Advance = t.adv };

@@ -76,7 +76,30 @@ function read() {
     output: $("output").value,
     suffixEnabled: Boolean($("suffix-enabled").checked),
     suffixText: normalizeSuffixText($("suffix-text").value),
+    customGlyphs: String($("custom-glyphs").value ?? "").replace(/[\x00-\x1f\x7f]/g, ""),
   };
+}
+function updateCustomGlyphInfo(reply?: any) {
+  const el = $("custom-glyphs-info");
+  if (!el) return;
+  const raw = String($("custom-glyphs").value ?? "").trim();
+  if (typeof reply?.customAssignedCount === "number") {
+    const cap = reply.customCapacity ?? 64;
+    const overflow =
+      typeof reply.customOverflowCount === "number" && reply.customOverflowCount > 0
+        ? `；超出上限 ${cap} 格，多余 ${reply.customOverflowCount} 字未映射`
+        : "";
+    el.textContent =
+      reply.customAssignedCount > 0
+        ? `已映射到第 128 行扩展槽位：${reply.customAssignedCount} / ${cap} 格（需与 Unity 字库工坊同步烘焙${overflow}）`
+        : raw
+          ? "所填字符均已在默认 8,089 字库中内置，无需占用额外槽位"
+          : "当前未设置额外生僻字（默认 8,089 字库 + 繁简转换已生效）";
+  } else {
+    el.textContent = raw
+      ? "输入变更将在失去焦点或保存时生效（第 128 行最多 64 格）"
+      : "当前未设置额外生僻字（默认 8,089 字库 + 繁简转换已生效）";
+  }
 }
 function updateSuffixPreview() {
   const enabled = Boolean($("suffix-enabled").checked);
@@ -469,6 +492,7 @@ async function save(restart = false) {
   const reply = await call("save", next);
   settings = next;
   $("endpoint").value = reply.modelUrl;
+  updateCustomGlyphInfo(reply);
   updateMode();
   status("设置已保存");
   toast("设置已保存", "success");
@@ -500,6 +524,7 @@ $("test").onclick = () =>
     const reply = await call("save", next);
     settings = next;
     $("endpoint").value = reply.modelUrl;
+    updateCustomGlyphInfo(reply);
     updateMode();
     if (enqueue($("text").value)) toast("文字已提交到播放队列", "success");
     else if (!$("text").value.trim()) toast("请输入要播放的文字", "error");
@@ -583,7 +608,9 @@ void safe(async () => {
   $("sound").checked = settings.sound;
   $("suffix-enabled").checked = Boolean(settings.suffixEnabled);
   $("suffix-text").value = settings.suffixText ?? "喵";
+  $("custom-glyphs").value = settings.customGlyphs ?? "";
   updateSuffixPreview();
+  updateCustomGlyphInfo(init);
   $("endpoint").value = init.modelUrl;
   resetSegment();
   updateMode();
@@ -666,8 +693,11 @@ async function saveQuiet() {
   const reply = await call("save", next);
   settings = next;
   $("endpoint").value = reply.modelUrl;
+  updateCustomGlyphInfo(reply);
   updateMode();
 }
 $("suffix-enabled").onchange = () => void safe(saveQuiet);
 $("suffix-text").oninput = () => updateSuffixPreview();
 $("suffix-text").onchange = () => void safe(saveQuiet);
+$("custom-glyphs").oninput = () => updateCustomGlyphInfo();
+$("custom-glyphs").onchange = () => void safe(saveQuiet);

@@ -74,6 +74,7 @@ namespace EkacBubble.Editor
         public float waveSpeed = 4.5f;
 
         public Texture2D atlasTex;
+        public Texture2D atlasTex1;
 
         public void CaptureFromMaterial(Material mat)
         {
@@ -136,6 +137,7 @@ namespace EkacBubble.Editor
             waveSpeed = mat.GetFloat("_WaveSpeed");
 
             atlasTex = mat.GetTexture("_AtlasTex") as Texture2D;
+            atlasTex1 = mat.GetTexture("_AtlasTex1") as Texture2D;
         }
 
         public void ApplyToMaterial(Material mat, bool recordUndo = true)
@@ -200,7 +202,26 @@ namespace EkacBubble.Editor
             mat.SetFloat("_WaveFreq", waveFreq);
             mat.SetFloat("_WaveSpeed", waveSpeed);
 
-            if (atlasTex != null) mat.SetTexture("_AtlasTex", atlasTex);
+            if (atlasTex != null)
+            {
+                mat.SetTexture("_AtlasTex", atlasTex);
+                if (atlasTex1 != null)
+                {
+                    mat.SetTexture("_AtlasTex1", atlasTex1);
+                }
+                else
+                {
+                    string p0 = AssetDatabase.GetAssetPath(atlasTex);
+                    string siblingP1 = !string.IsNullOrEmpty(p0) ? EkacBubbleFontBaker.DerivePage1AssetPath(p0) : null;
+                    var texP1 = !string.IsNullOrEmpty(siblingP1) ? AssetDatabase.LoadAssetAtPath<Texture2D>(siblingP1) : null;
+                    if (texP1 == null) texP1 = AssetDatabase.LoadAssetAtPath<Texture2D>(EkacBubbleBuilder.AtlasPage1Path);
+                    if (texP1 != null) mat.SetTexture("_AtlasTex1", texP1);
+                }
+            }
+            else if (atlasTex1 != null)
+            {
+                mat.SetTexture("_AtlasTex1", atlasTex1);
+            }
 
             EditorUtility.SetDirty(mat);
             SceneView.RepaintAll();
@@ -214,6 +235,7 @@ namespace EkacBubble.Editor
             {
                 // Keep user's current textures unless explicitly switching frameMode
                 temp.atlasTex = mat.GetTexture("_AtlasTex") as Texture2D;
+                temp.atlasTex1 = mat.GetTexture("_AtlasTex1") as Texture2D;
                 temp.skinTex = mat.GetTexture("_SkinTex") as Texture2D;
                 temp.badgeTex = mat.GetTexture("_BadgeTex") as Texture2D;
 

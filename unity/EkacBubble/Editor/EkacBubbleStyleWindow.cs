@@ -19,7 +19,10 @@ namespace EkacBubble.Editor
         private int _bakePointSize = 40;
         private int _bakeBaselineOffset = 0;
         private int _systemFontIdx = 0;
+        private string _customGlyphs = "";
         private List<(string label, string path)> _installedSystemFonts;
+
+        private const string CustomGlyphsPrefKey = "EkacBubble_CustomGlyphs";
 
         private static readonly string[] TabNames =
         {
@@ -56,6 +59,8 @@ namespace EkacBubble.Editor
         private void OnEnable()
         {
             ScanSystemFonts();
+            _customGlyphs = EditorPrefs.GetString(CustomGlyphsPrefKey, "");
+            EkacBubbleFontBaker.SetCustomGlyphs(_customGlyphs);
         }
 
         private void ScanSystemFonts()
@@ -383,15 +388,18 @@ namespace EkacBubble.Editor
         private void DrawTabFontBaker(Material mat)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("当前绑定 SDF 字库贴图", EditorStyles.boldLabel);
-            EditTexture(mat, "_AtlasTex", "当前字库 (_AtlasTex)");
-            if (GUILayout.Button("恢复默认内置思源黑体字库 (EkacGlyphAtlas.png)", GUILayout.Height(26)))
+            EditorGUILayout.LabelField("当前绑定双页 4K SDF 字库贴图 (共 8,192 格)", EditorStyles.boldLabel);
+            EditTexture(mat, "_AtlasTex", "第 1 页字库 (_AtlasTex)");
+            EditTexture(mat, "_AtlasTex1", "第 2 页扩展字库 (_AtlasTex1)");
+            if (GUILayout.Button("恢复默认内置双页思源黑体字库 (EkacGlyphAtlas + P1)", GUILayout.Height(26)))
             {
-                var defTex = AssetDatabase.LoadAssetAtPath<Texture2D>(EkacBubbleBuilder.AtlasPath);
-                if (defTex != null)
+                var defTex0 = AssetDatabase.LoadAssetAtPath<Texture2D>(EkacBubbleBuilder.AtlasPath);
+                var defTex1 = AssetDatabase.LoadAssetAtPath<Texture2D>(EkacBubbleBuilder.AtlasPage1Path);
+                if (defTex0 != null)
                 {
-                    Undo.RecordObject(mat, "Restore Default Font Atlas");
-                    mat.SetTexture("_AtlasTex", defTex);
+                    Undo.RecordObject(mat, "Restore Default Dual-Page Font Atlas");
+                    mat.SetTexture("_AtlasTex", defTex0);
+                    if (defTex1 != null) mat.SetTexture("_AtlasTex1", defTex1);
                     EditorUtility.SetDirty(mat);
                     SceneView.RepaintAll();
                 }
@@ -401,9 +409,9 @@ namespace EkacBubble.Editor
             EditorGUILayout.Space(6);
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("一键烘焙自定义字体 (.ttf / .otf / .ttc → 4096×4096 SDF)", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("一键烘焙自定义字体 (.ttf / .otf / .ttc → 双页 4K SDF)", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "无需修改桌面端 ekac-bubble！此工具使用固定 4057 字编码表将您选择的字体在 Unity 本地直接烘焙为 16 倍超采样 SDF 字库贴图，遇到生僻缺字自动用后备字体补齐。",
+                "已升级双页 8,192 格编码表（含 GB2312 全部 6,763 一/二级字如「霆」「尬」「氪」「炫」、日语常见汉字及繁简自动映射）。下方会同时烘焙双页 4K 贴图，缺字自动用后备字体补齐。",
                 MessageType.Info
             );
 
@@ -452,6 +460,24 @@ namespace EkacBubble.Editor
             _bakePointSize = EditorGUILayout.IntSlider("字形采样字号 (默认 40)", _bakePointSize, 26, 50);
             _bakeBaselineOffset = EditorGUILayout.IntSlider("垂直基线微调 (px)", _bakeBaselineOffset, -10, 10);
 
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("可选：个人必收生僻字扩展 (第 128 行，最多 64 格)", EditorStyles.miniBoldLabel);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUI.BeginChangeCheck();
+            _customGlyphs = EditorGUILayout.TextField(_customGlyphs);
+            if (EditorGUI.EndChangeCheck())
+            {
+                EditorPrefs.SetString(CustomGlyphsPrefKey, _customGlyphs ?? "");
+                EkacBubbleFontBaker.SetCustomGlyphs(_customGlyphs);
+                if (EkacBubbleScenePreview.IsActive) EkacBubbleScenePreview.PushPreviewBuffers();
+            }
+            if (GUILayout.Button("复制同步到桌面端", GUILayout.Width(122)))
+            {
+                EditorGUIUtility.systemCopyBuffer = _customGlyphs ?? "";
+                ShowNotification(new GUIContent("已复制个人生僻字列表，请粘贴到桌面端「模型端口」页面"));
+            }
+            EditorGUILayout.EndHorizontal();
+
             EditorGUILayout.Space(6);
             string resolvedPrimary = _selectedUnityFont != null
                 ? EkacBubbleFontBaker.ResolveFontFilePath(_selectedUnityFont)
@@ -465,34 +491,39 @@ namespace EkacBubble.Editor
             GUI.enabled = !string.IsNullOrEmpty(resolvedPrimary) && File.Exists(resolvedPrimary);
             Color prev = GUI.backgroundColor;
             GUI.backgroundColor = new Color(0.65f, 0.88f, 1.0f);
-            if (GUILayout.Button("立即烘焙 4096×4096 SDF 字库并应用到材质", GUILayout.Height(34)))
+            if (GUILayout.Button("立即烘焙双页 4K SDF 字库并应用到材质", GUILayout.Height(34)))
             {
                 try
                 {
                     string fbPath = EkacBubbleFontBaker.ResolveFontFilePath(_fallbackUnityFont);
-                    var baked = EkacBubbleFontBaker.BakeFontAtlas(
+                    var baked0 = EkacBubbleFontBaker.BakeFontAtlas(
                         resolvedPrimary,
                         out var report,
                         null,
                         _bakePointSize,
                         _bakeBaselineOffset,
                         fbPath,
-                        true
+                        true,
+                        _customGlyphs ?? ""
                     );
-                    if (baked != null)
+                    if (baked0 != null)
                     {
-                        Undo.RecordObject(mat, "Assign Custom Baked Font Atlas");
-                        mat.SetTexture("_AtlasTex", baked);
+                        Undo.RecordObject(mat, "Assign Custom Baked Dual-Page Font Atlas");
+                        mat.SetTexture("_AtlasTex", baked0);
+                        if (report.TexturePage1 != null) mat.SetTexture("_AtlasTex1", report.TexturePage1);
                         EditorUtility.SetDirty(mat);
                         AssetDatabase.SaveAssets();
                         if (!EkacBubbleScenePreview.IsActive) EkacBubbleScenePreview.IsActive = true;
+                        EkacBubbleScenePreview.PushPreviewBuffers();
                         SceneView.RepaintAll();
                         EditorUtility.DisplayDialog(
                             "ekac 气泡工坊",
-                            $"字体烘焙完成并已应用到当前材质！\n\n" +
-                            $"输出贴图：{report.OutputAssetPath}\n" +
+                            $"双页 4K 字体烘焙完成并已应用到当前材质！\n\n" +
+                            $"第 1 页：{report.OutputAssetPath}\n" +
+                            $"第 2 页：{report.OutputPage1AssetPath}\n" +
                             $"主字体渲染：{report.PrimaryRenderedCount} 字\n" +
-                            $"缺字回退补齐：{report.FallbackRenderedCount} 字",
+                            $"缺字回退补齐：{report.FallbackRenderedCount} 字\n" +
+                            $"个人生僻字槽位：{report.CustomRenderedCount} 字",
                             "太棒了"
                         );
                     }
