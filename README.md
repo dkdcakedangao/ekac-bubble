@@ -16,29 +16,29 @@
 
 <p>
   <a href="https://github.com/dkdcakedangao/ekac-bubble/releases/latest"><strong>📦 下载最新便携版</strong></a> ·
-  <a href="#核心亮点">✨ 核心亮点</a> ·
-  <a href="#三种使用场景">🎭 三种场景</a> ·
-  <a href="#unity-头顶气泡与字体工坊">🎨 Unity 气泡工坊</a> ·
-  <a href="#快速开始">🚀 快速开始</a> ·
-  <a href="#常见问题">❓ 常见问题</a>
+  <a href="#核心亮点">核心亮点</a> ·
+  <a href="#三种使用场景">三种场景</a> ·
+  <a href="#unity-头顶气泡与字体工坊">Unity 气泡工坊</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#常见问题">常见问题</a>
 </p>
 
 </div>
 
 ---
 
-## ✨ 核心亮点
+## 核心亮点
 
-- **🔒 100% 本机离线识别**：内置 `SenseVoiceSmall`（INT8 CPU 推理），语音不上传云端；支持**按住快捷键说话（默认 `F8`）**与**持续监听**双模式，后台自动排队最多 10 句不漏话。
-- **♫ 动森风逐字短音节合成**：参考《动物森友会》/ Coopanion 发声质感，根据中英日韩发音自动匹配音节、声调起伏与标点停顿，句尾问号自动升调、感叹号自动加重，支持独立调节**音高（200–800 Hz）**、**语速**与**单音节时长（60–400 ms）**。
-- **🐾 固定句尾口癖加字**：支持一键开启句尾后缀（如自动加上 `喵`、`喵～`、`捏`），智能插入在句末标点之前并自动防叠字去重，短音节发声、Chatbox 与头顶气泡全链路同步生效。
-- **💬 VRChat 三层头顶气泡（零 Chatbox 占用）**：配套 Modular Avatar 一键无损挂载插件，仅占 `151 / 256` 同步 bits，支持双行自动折行、逐字弹入、最多三层气泡往上顶推与游戏内圆盘菜单实时开关/调高度/调缩放。
-- **🎨 Unity 气泡外观与一键换字体工坊**：无需修改桌面端协议，在 Unity 内可视化定制圆角/直角框、**9-Slice 九宫格贴图皮肤**、猫耳/星标角标贴纸、HDR 自发光与文字外描边，并内置**纯 C# `.ttf / .otf / .ttc` SDF 字体烘焙器**。
-- **🧳 纯绿色便携目录**：所有配置、日志与识别模型均保存在程序同级 `data/` 目录，不污染系统 `AppData`，整夹复制即可随身迁移。
+- **100% 本机离线识别**：内置 `SenseVoiceSmall`（INT8 CPU 推理），语音不上传云端；支持**按住快捷键说话（默认 `F8`）**与**持续监听**双模式，后台自动排队最多 10 句不漏话。
+- **动森风逐字短音节合成**：参考《动物森友会》/ Coopanion 发声质感，根据中英日韩发音自动匹配音节、声调起伏与标点停顿，句尾问号自动升调、感叹号自动加重，支持独立调节**音高（200–800 Hz）**、**语速**与**单音节时长（60–400 ms）**。
+- **固定句尾口癖加字**：支持一键开启句尾后缀（如自动加上 `喵`、`喵～`、`捏`），智能插入在句末标点之前并自动防叠字去重，短音节发声、Chatbox 与头顶气泡全链路同步生效。
+- **VRChat 三层头顶气泡（零 Chatbox 占用）**：配套 Modular Avatar 一键无损挂载插件，仅占 `151 / 256` 同步 bits，支持双行自动折行、逐字弹入、最多三层气泡往上顶推与游戏内圆盘菜单实时开关/调高度/调缩放。
+- **Unity 气泡外观与一键换字体工坊**：无需修改桌面端协议，在 Unity 内可视化定制圆角/直角框、**9-Slice 九宫格贴图皮肤**、猫耳/星标角标贴纸、HDR 自发光与文字外描边，并内置**纯 C# `.ttf / .otf / .ttc` SDF 字体烘焙器**。
+- **纯绿色便携目录**：所有配置、日志与识别模型均保存在程序同级 `data/` 目录，不污染系统 `AppData`，整夹复制即可随身迁移。
 
 ---
 
-## 🖥️ 工作台界面预览
+## 工作台界面预览
 
 <div align="center">
   <img src="docs/ui-overview.png" alt="ekac-bubble 语音工作台界面预览" width="94%" />
@@ -46,7 +46,7 @@
 
 ---
 
-## 🎭 三种使用场景
+## 三种使用场景
 
 | 模式 | 声音输出 | 字幕 / 气泡输出 | 适用场景 |
 | :--- | :--- | :--- | :--- |
@@ -56,7 +56,7 @@
 
 ---
 
-## 🎨 Unity 头顶气泡与字体工坊
+## Unity 头顶气泡与字体工坊
 
 <div align="center">
   <img src="docs/unity-styles.png" alt="Unity 头顶气泡样式与字体工坊实机渲染" width="96%" />
@@ -76,7 +76,7 @@
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
 ### 第一步：下载与准备模型
 1. 从 [Releases](https://github.com/dkdcakedangao/ekac-bubble/releases/latest) 下载 `ekac-bubble-0.3.0-win-x64.zip`，解压到任意**有写入权限**的文件夹（请勿直接放在需要管理员权限的 `C:\Program Files` 下），双击运行 `ekac-bubble.exe`。
@@ -128,7 +128,7 @@
 
 ---
 
-## 🛠️ 本地开发与构建
+## 本地开发与构建
 
 环境要求：**Node.js 22+**（Windows x64）
 
@@ -156,7 +156,7 @@ npm run package
 
 ---
 
-## 📄 开源许可与致谢
+## 开源许可与致谢
 
 本项目基于 **[GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)](LICENSE)** 开源发布。  
 语音识别基于 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)（SenseVoiceSmall），短音节切分与多语种发音词典致谢 [Coopanion](https://github.com/Pal-AI-Lab/Coopanion)，详见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
